@@ -88,23 +88,30 @@ echo "Output: $OUTPUT_DIR"
 echo ""
 
 # ---------------------------------------------------------------
-# Helper: run a command for one compartment, write to a temp file
+# merge_parts: combine per-chunk JSON array files into one output
+# Each part file contains a JSON array. Result: {"data": [...merged...]}
+# Streams through files on disk instead of accumulating in memory.
 # ---------------------------------------------------------------
-run_single() {
-  local cmd="$1"
-  local cid="$2"
-  local raw
-  raw=$(eval "$cmd --compartment-id $cid --all $REGION_FLAG" 2>/dev/null || true)
-  # OCI CLI sometimes prepends warnings/text before JSON — strip everything before first {
-  if [ -n "$raw" ]; then
-    echo "$raw" | sed -n '/^[[:space:]]*{/,$p'
+merge_parts() {
+  local td="$1" outfile="$2"
+  local parts=("$td"/part_*.json)
+  if [ ! -e "${parts[0]}" ]; then return 1; fi
+  # Merge all arrays and wrap in envelope
+  jq -s 'add' "$td"/part_*.json | jq '{data:.}' > "$outfile" 2>/dev/null
+  local cnt
+  cnt=$(jq '.data | length' "$outfile" 2>/dev/null || echo 0)
+  if [ "$cnt" -gt 0 ]; then
+    echo " OK ($cnt items)"
+    return 0
   else
-    echo '{"data":[]}'
+    rm -f "$outfile"
+    return 1
   fi
 }
 
 # ---------------------------------------------------------------
-# Helper: export a resource type across all compartments, merging
+# run_export: export a resource type across all compartments
+# Each compartment result streams to a temp file on disk.
 # ---------------------------------------------------------------
 run_export() {
   local name="$1"
@@ -114,7 +121,7 @@ run_export() {
   echo -n "  Exporting ${name}..."
 
   if [ ${#COMPARTMENT_IDS[@]} -eq 1 ]; then
-    # Single compartment — simple case
+    # Single compartment — pipe directly to file
     if eval "$cmd --compartment-id ${COMPARTMENT_IDS[0]} --all $REGION_FLAG" > "$outfile" 2>/dev/null; then
       local count
       count=$(jq '.data | length' "$outfile" 2>/dev/null || echo "?")
@@ -124,30 +131,28 @@ run_export() {
       rm -f "$outfile"
     fi
   else
-    # Multi-compartment — merge data arrays with jq
-    local merged='[]'
-    local ok=false
+    # Multi-compartment — stream each result to a temp file
+    local td
+    td=$(mktemp -d)
+    local i=0
     for cid in "${COMPARTMENT_IDS[@]}"; do
-      local result
-      result=$(run_single "$cmd" "$cid")
-      local items
-      items=$(echo "$result" | jq -r '.data // []' 2>/dev/null || echo '[]')
-      merged=$(echo "$merged" "$items" | jq -s '.[0] + .[1]')
-      ok=true
+      eval "$cmd --compartment-id $cid --all $REGION_FLAG" 2>/dev/null \
+        | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
+      # Remove empty arrays to save disk
+      if [ -f "$td/part_$i.json" ]; then
+        local len
+        len=$(jq length "$td/part_$i.json" 2>/dev/null || echo 0)
+        [ "$len" -eq 0 ] && rm -f "$td/part_$i.json"
+      fi
+      i=$((i + 1))
     done
-    if $ok && [ "$(echo "$merged" | jq 'length')" -gt 0 ]; then
-      echo "{\"data\": $merged}" > "$outfile"
-      echo " OK ($(echo "$merged" | jq 'length') items)"
-    else
-      echo " EMPTY (skipping)"
-      rm -f "$outfile"
-    fi
+    merge_parts "$td" "$outfile" || echo " EMPTY (skipping)"
+    rm -rf "$td"
   fi
 }
 
 # ---------------------------------------------------------------
-# Helper: export resources that need per-AD iteration
-# (boot-volume-attachments, boot-volumes need --availability-domain)
+# run_export_per_ad: export resources that need --availability-domain
 # ---------------------------------------------------------------
 run_export_per_ad() {
   local name="$1"
@@ -156,39 +161,34 @@ run_export_per_ad() {
 
   echo -n "  Exporting ${name} (per-AD)..."
 
-  local merged='[]'
-  local ok=false
+  local td
+  td=$(mktemp -d)
+  local i=0
 
   for cid in "${COMPARTMENT_IDS[@]}"; do
-    # Discover availability domains for this compartment
     local ads
     ads=$(oci iam availability-domain list --compartment-id "$cid" $REGION_FLAG 2>/dev/null | jq -r '.data[]?.name // empty' 2>/dev/null || true)
-    if [ -z "$ads" ]; then
-      continue
-    fi
+    [ -z "$ads" ] && continue
 
     while IFS= read -r ad; do
       [ -z "$ad" ] && continue
-      local result
-      result=$(eval "$cmd --compartment-id $cid --availability-domain \"$ad\" --all $REGION_FLAG" 2>/dev/null || echo '{"data":[]}')
-      local items
-      items=$(echo "$result" | jq -r '.data // []' 2>/dev/null || echo '[]')
-      merged=$(echo "$merged" "$items" | jq -s '.[0] + .[1]')
-      ok=true
+      eval "$cmd --compartment-id $cid --availability-domain \"$ad\" --all $REGION_FLAG" 2>/dev/null \
+        | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
+      if [ -f "$td/part_$i.json" ]; then
+        local len
+        len=$(jq length "$td/part_$i.json" 2>/dev/null || echo 0)
+        [ "$len" -eq 0 ] && rm -f "$td/part_$i.json"
+      fi
+      i=$((i + 1))
     done <<< "$ads"
   done
 
-  if $ok && [ "$(echo "$merged" | jq 'length')" -gt 0 ]; then
-    echo "{\"data\": $merged}" > "$outfile"
-    echo " OK ($(echo "$merged" | jq 'length') items)"
-  else
-    echo " EMPTY (skipping)"
-    rm -f "$outfile"
-  fi
+  merge_parts "$td" "$outfile" || echo " EMPTY (skipping)"
+  rm -rf "$td"
 }
 
 # ---------------------------------------------------------------
-# Helper: export resources that need a parent resource ID
+# run_export_per_parent: export resources that need a parent ID
 # e.g., functions need --application-id, node-pools need --cluster-id
 # ---------------------------------------------------------------
 run_export_per_parent() {
@@ -213,33 +213,30 @@ run_export_per_parent() {
     return
   fi
 
-  local merged='[]'
-  local ok=false
+  local td
+  td=$(mktemp -d)
+  local i=0
 
   while IFS= read -r pid; do
     [ -z "$pid" ] && continue
-    local result
-    result=$(eval "$child_cmd $pid --all $REGION_FLAG" 2>/dev/null || echo '{"data":[]}')
-    local items
-    items=$(echo "$result" | jq -r '.data // []' 2>/dev/null || echo '[]')
-    merged=$(echo "$merged" "$items" | jq -s '.[0] + .[1]')
-    ok=true
+    eval "$child_cmd $pid --all $REGION_FLAG" 2>/dev/null \
+      | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
+    if [ -f "$td/part_$i.json" ]; then
+      local len
+      len=$(jq length "$td/part_$i.json" 2>/dev/null || echo 0)
+      [ "$len" -eq 0 ] && rm -f "$td/part_$i.json"
+    fi
+    i=$((i + 1))
   done <<< "$parent_ids"
 
-  if $ok && [ "$(echo "$merged" | jq 'length')" -gt 0 ]; then
-    echo "{\"data\": $merged}" > "$outfile"
-    echo " OK ($(echo "$merged" | jq 'length') items)"
-  else
-    echo " EMPTY (skipping)"
-    rm -f "$outfile"
-  fi
+  merge_parts "$td" "$outfile" || echo " EMPTY (skipping)"
+  rm -rf "$td"
 }
 
 # ===================================================================
-# IAM (most IAM resources are tenancy-scoped, use first compartment)
+# IAM
 # ===================================================================
 echo "=== IAM ==="
-# Compartments with subtree traversal — run once per compartment ID
 run_export "compartments" "oci iam compartment list --compartment-id-in-subtree true"
 run_export "users" "oci iam user list"
 run_export "groups" "oci iam group list"
@@ -306,7 +303,6 @@ run_export "load-balancers" "oci lb load-balancer list"
 echo ""
 echo "=== Containers ==="
 run_export "oke-clusters" "oci ce cluster list"
-# Node pools require --cluster-id
 run_export_per_parent "node-pools" "oci ce node-pool list --cluster-id" "oke-clusters" '.id'
 run_export "container-instances" "oci container-instances container-instance list"
 
@@ -316,10 +312,8 @@ run_export "container-instances" "oci container-instances container-instance lis
 echo ""
 echo "=== Serverless ==="
 run_export "functions-applications" "oci fn application list"
-# Functions require --application-id (not compartment-id)
 run_export_per_parent "functions" "oci fn function list --application-id" "functions-applications" '.id'
 run_export "api-gateways" "oci api-gateway gateway list"
-# API deployments require --gateway-id
 run_export_per_parent "api-deployments" "oci api-gateway deployment list --gateway-id" "api-gateways" '.id'
 
 # ===================================================================

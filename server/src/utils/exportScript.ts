@@ -33,32 +33,49 @@ RF=""; [ -n "\$REGION" ] && RF="--region \$REGION"
 mkdir -p "\$OUTPUT_DIR"
 echo "=== OCI Export (\${#CIDS[@]} compartments) ==="
 
+# merge_parts: combine per-chunk JSON array files into one {"data":[...]} output
+# Usage: merge_parts <tmp_dir> <output_file>
+merge_parts() {
+  local td=\$1 o=\$2
+  local parts=("\$td"/part_*.json)
+  if [ ! -e "\${parts[0]}" ]; then return 1; fi
+  # Stream all part files through jq, merge arrays, wrap in envelope
+  jq -s 'add' "\$td"/part_*.json | jq '{data:.}' >"\$o" 2>/dev/null
+  local cnt; cnt=\$(jq '.data|length' "\$o" 2>/dev/null||echo 0)
+  [ "\$cnt" -gt 0 ] && return 0 || { rm -f "\$o"; return 1; }
+}
+
 e() {
   local n=\$1 c=\$2; local o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n..."
   if [ \${#CIDS[@]} -eq 1 ]; then
     eval "\$c --compartment-id \${CIDS[0]} --all \$RF" >"\$o" 2>/dev/null && echo " OK" || { echo " skip"; rm -f "\$o"; }
   else
-    local m='[]'
+    local td; td=\$(mktemp -d); local i=0
     for cid in "\${CIDS[@]}"; do
-      local r; r=\$(eval "\$c --compartment-id \$cid --all \$RF" 2>/dev/null || echo '{"data":[]}')
-      m=\$(echo "\$m" "\$(echo "\$r"|jq '.data//[]')" | jq -s '.[0]+.[1]')
+      eval "\$c --compartment-id \$cid --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
+      # Remove empty arrays to save disk
+      [ -f "\$td/part_\$i.json" ] && [ "\$(jq length "\$td/part_\$i.json" 2>/dev/null||echo 0)" -eq 0 ] && rm -f "\$td/part_\$i.json"
+      i=\$((i+1))
     done
-    [ "\$(echo "\$m"|jq length)" -gt 0 ] && { echo "{\\"data\\":\$m}">"\$o"; echo " OK"; } || { echo " empty"; rm -f "\$o"; }
+    merge_parts "\$td" "\$o" && echo " OK" || echo " empty"
+    rm -rf "\$td"
   fi
 }
 
 ead() {
   local n=\$1 c=\$2; local o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n (per-AD)..."
-  local m='[]'
+  local td; td=\$(mktemp -d); local i=0
   for cid in "\${CIDS[@]}"; do
     local ads; ads=\$(oci iam availability-domain list --compartment-id "\$cid" \$RF 2>/dev/null|jq -r '.data[]?.name//empty' 2>/dev/null||true)
     [ -z "\$ads" ] && continue
     while IFS= read -r ad; do [ -z "\$ad" ]&&continue
-      local r; r=\$(eval "\$c --compartment-id \$cid --availability-domain \\"\$ad\\" --all \$RF" 2>/dev/null || echo '{"data":[]}')
-      m=\$(echo "\$m" "\$(echo "\$r"|jq '.data//[]')" | jq -s '.[0]+.[1]')
+      eval "\$c --compartment-id \$cid --availability-domain \\"\$ad\\" --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
+      [ -f "\$td/part_\$i.json" ] && [ "\$(jq length "\$td/part_\$i.json" 2>/dev/null||echo 0)" -eq 0 ] && rm -f "\$td/part_\$i.json"
+      i=\$((i+1))
     done <<<"\$ads"
   done
-  [ "\$(echo "\$m"|jq length)" -gt 0 ] && { echo "{\\"data\\":\$m}">"\$o"; echo " OK"; } || { echo " empty"; rm -f "\$o"; }
+  merge_parts "\$td" "\$o" && echo " OK" || echo " empty"
+  rm -rf "\$td"
 }
 
 epp() {
@@ -66,12 +83,14 @@ epp() {
   [ ! -f "\$pp" ] && { echo " skip (no \$pf)"; return; }
   local pids; pids=\$(jq -r ".data[]?\$pk//empty" "\$pp" 2>/dev/null||true)
   [ -z "\$pids" ] && { echo " empty"; return; }
-  local m='[]'
+  local td; td=\$(mktemp -d); local i=0
   while IFS= read -r pid; do [ -z "\$pid" ]&&continue
-    local r; r=\$(eval "\$c \$pid --all \$RF" 2>/dev/null || echo '{"data":[]}')
-    m=\$(echo "\$m" "\$(echo "\$r"|jq '.data//[]')" | jq -s '.[0]+.[1]')
+    eval "\$c \$pid --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
+    [ -f "\$td/part_\$i.json" ] && [ "\$(jq length "\$td/part_\$i.json" 2>/dev/null||echo 0)" -eq 0 ] && rm -f "\$td/part_\$i.json"
+    i=\$((i+1))
   done <<<"\$pids"
-  [ "\$(echo "\$m"|jq length)" -gt 0 ] && { echo "{\\"data\\":\$m}">"\$o"; echo " OK"; } || { echo " empty"; rm -f "\$o"; }
+  merge_parts "\$td" "\$o" && echo " OK" || echo " empty"
+  rm -rf "\$td"
 }
 
 echo "=== IAM ==="

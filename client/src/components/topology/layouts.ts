@@ -19,7 +19,7 @@ export function getLayoutedElements(
 ) {
   const g = new dagre.graphlib.Graph({ compound: true });
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: direction, nodesep: 60, ranksep: 80, marginx: 20, marginy: 20 });
+  g.setGraph({ rankdir: direction, nodesep: 80, ranksep: 120, marginx: 40, marginy: 40 });
 
   // Only layout top-level nodes with dagre (children handled by React Flow grouping)
   const topLevelNodes = nodes.filter(n => !n.parentNode);
@@ -59,7 +59,7 @@ export function getLayoutedElements(
     children.forEach((child, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      positions[child.id] = { x: 30 + col * 180, y: 60 + row * 120 };
+      positions[child.id] = { x: 40 + col * 200, y: 60 + row * 100 };
     });
   });
 

@@ -16,7 +16,12 @@ export function formatDate(dateString: string | null): string {
 }
 
 export function formatResourceType(type: string): string {
-  return type.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || type;
+  const suffix = type.split('/').pop() || type;
+  // Insert spaces before uppercase letters for camelCase OCID types (e.g. "vaultsecret" → "Vault Secret")
+  return suffix
+    .replace(/-/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export function resourceTypeCategory(type: string): string {

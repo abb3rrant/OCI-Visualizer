@@ -22,6 +22,7 @@ import LoadBalancerNode from './nodes/LoadBalancerNode';
 import StorageNode from './nodes/StorageNode';
 import GatewayNode from './nodes/GatewayNode';
 import GenericNode from './nodes/GenericNode';
+import SecurityNode from './nodes/SecurityNode';
 import RelationshipEdge from './edges/RelationshipEdge';
 
 const nodeTypes = {
@@ -33,6 +34,7 @@ const nodeTypes = {
   loadBalancerNode: LoadBalancerNode,
   storageNode: StorageNode,
   gatewayNode: GatewayNode,
+  securityNode: SecurityNode,
   genericNode: GenericNode,
 };
 
@@ -56,29 +58,71 @@ const nodeDimensions: Record<string, { width: number; height: number }> = {
   loadBalancerNode: { width: 160, height: 60 },
   storageNode: { width: 140, height: 60 },
   gatewayNode: { width: 120, height: 50 },
+  securityNode: { width: 130, height: 50 },
   genericNode: { width: 140, height: 50 },
 };
 
 export default function TopologyCanvas({ topologyNodes, topologyEdges, onNodeClick }: TopologyCanvasProps) {
   const { flowNodes, flowEdges } = useMemo(() => {
+    // Count children per parent to dynamically size containers
+    const childCount = new Map<string, number>();
+    for (const n of topologyNodes) {
+      if (n.parentNode) {
+        childCount.set(n.parentNode, (childCount.get(n.parentNode) || 0) + 1);
+      }
+    }
+
+    // Compute dynamic size for container nodes based on child count
+    function getContainerSize(nodeId: string, nodeType: string) {
+      const count = childCount.get(nodeId) || 0;
+      if (count === 0) {
+        // No children — use minimal size
+        return { width: 200, height: 80 };
+      }
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      const w = Math.max(280, 40 + cols * 200 + 40);
+      const h = Math.max(140, 60 + rows * 100 + 20);
+      return { width: w, height: h };
+    }
+
+    const containerTypes = new Set(['compartmentNode', 'vcnNode']);
+
     // Get layout positions
-    const layoutNodes = topologyNodes.map(n => ({
-      id: n.id,
-      width: (nodeDimensions[n.type] || nodeDimensions.genericNode).width,
-      height: (nodeDimensions[n.type] || nodeDimensions.genericNode).height,
-      parentNode: n.parentNode,
-    }));
+    const layoutNodes = topologyNodes.map(n => {
+      if (containerTypes.has(n.type)) {
+        const size = getContainerSize(n.id, n.type);
+        return { id: n.id, width: size.width, height: size.height, parentNode: n.parentNode };
+      }
+      return {
+        id: n.id,
+        width: (nodeDimensions[n.type] || nodeDimensions.genericNode).width,
+        height: (nodeDimensions[n.type] || nodeDimensions.genericNode).height,
+        parentNode: n.parentNode,
+      };
+    });
     const layoutEdges = topologyEdges.map(e => ({ source: e.source, target: e.target }));
     const positions = getLayoutedElements(layoutNodes, layoutEdges);
 
-    const flowNodes: Node[] = topologyNodes.map(n => ({
-      id: n.id,
-      type: n.type,
-      position: positions[n.id] || { x: 0, y: 0 },
-      data: { label: n.label, resourceType: n.resourceType, ocid: n.ocid, lifecycleState: n.lifecycleState, metadata: n.metadata },
-      ...(n.parentNode ? { parentId: n.parentNode, extent: 'parent' as const } : {}),
-      style: ['compartmentNode', 'vcnNode'].includes(n.type) ? { width: nodeDimensions[n.type]?.width, height: nodeDimensions[n.type]?.height } : undefined,
-    }));
+    // Build a map for container sizes for use in style
+    const containerSizes = new Map<string, { width: number; height: number }>();
+    for (const n of topologyNodes) {
+      if (containerTypes.has(n.type)) {
+        containerSizes.set(n.id, getContainerSize(n.id, n.type));
+      }
+    }
+
+    const flowNodes: Node[] = topologyNodes.map(n => {
+      const size = containerSizes.get(n.id);
+      return {
+        id: n.id,
+        type: n.type,
+        position: positions[n.id] || { x: 0, y: 0 },
+        data: { label: n.label, resourceType: n.resourceType, ocid: n.ocid, lifecycleState: n.lifecycleState, metadata: n.metadata },
+        ...(n.parentNode ? { parentId: n.parentNode } : {}),
+        style: size ? { width: size.width, height: size.height } : undefined,
+      };
+    });
 
     const flowEdges: Edge[] = topologyEdges.map(e => ({
       id: e.id,

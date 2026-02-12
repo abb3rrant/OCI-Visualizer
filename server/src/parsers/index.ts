@@ -87,6 +87,7 @@ import {
 } from './iam.js';
 
 import { parseDnsZones } from './dns.js';
+import { parseGeneric } from './generic.js';
 
 // ---------------------------------------------------------------------------
 // Type-to-parser mapping (used for explicit type specification)
@@ -435,7 +436,11 @@ export function parseResources(
   // Otherwise, attempt auto-detection.
   const items = unwrap(json);
   const detectedType = detectType(items);
-  if (!detectedType) return [];
+  if (!detectedType) {
+    // Fallback: generic parser for unrecognised OCI resources.
+    // Extracts common fields and infers type from OCID prefix.
+    return parseGeneric(json);
+  }
 
   const parser = parserMap[detectedType];
   if (!parser) return [];
@@ -456,6 +461,7 @@ export { parseOkeClusters, parseNodePools, parseContainerInstances } from './con
 export { parseFunctionsApplications, parseFunctions, parseApiGateways, parseApiDeployments } from './serverless.js';
 export { parseCompartments, parseUsers, parseGroups, parsePolicies, parseDynamicGroups } from './iam.js';
 export { parseDnsZones } from './dns.js';
+export { parseGeneric } from './generic.js';
 
 /** All supported explicit resource type strings. */
 export const supportedTypes: string[] = Object.keys(parserMap);

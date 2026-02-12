@@ -110,13 +110,42 @@ export const resourceResolvers = {
       args: { snapshotId: string },
       ctx: Context,
     ) => {
-      return ctx.prisma.resource.findMany({
+      // First try: explicit iam/compartment resources (best — have display names)
+      const compartmentResources = await ctx.prisma.resource.findMany({
         where: {
           snapshotId: args.snapshotId,
           resourceType: 'iam/compartment',
         },
         orderBy: { displayName: 'asc' },
       });
+
+      if (compartmentResources.length > 0) return compartmentResources;
+
+      // Fallback: extract distinct compartmentId values from all resources
+      // and return synthetic compartment objects so the dropdown still works
+      const distinct = await ctx.prisma.resource.findMany({
+        where: { snapshotId: args.snapshotId, compartmentId: { not: null } },
+        select: { compartmentId: true },
+        distinct: ['compartmentId'],
+      });
+
+      return distinct
+        .filter((d: any) => d.compartmentId)
+        .map((d: any, i: number) => ({
+          id: `synthetic-compartment-${i}`,
+          ocid: d.compartmentId,
+          resourceType: 'iam/compartment',
+          displayName: d.compartmentId, // show OCID when no name available
+          compartmentId: null,
+          lifecycleState: null,
+          availabilityDomain: null,
+          regionKey: null,
+          timeCreated: null,
+          definedTags: null,
+          freeformTags: null,
+          rawData: null,
+          snapshotId: args.snapshotId,
+        }));
     },
 
     exportScript: () => generateExportScript(),

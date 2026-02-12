@@ -226,6 +226,28 @@ const RESOURCE_FIELDS: Record<string, FieldDef[]> = {
   ],
 };
 
+/**
+ * For resource types not in RESOURCE_FIELDS (e.g. generic/* types),
+ * auto-extract interesting-looking fields from rawData.
+ */
+function autoExtractFields(rawData: Record<string, any>): FieldDef[] {
+  const skip = new Set(['id', 'compartmentId', 'lifecycleState', 'displayName', 'timeCreated',
+    'definedTags', 'freeformTags', 'availabilityDomain', 'region']);
+  const fields: FieldDef[] = [];
+  for (const [key, value] of Object.entries(rawData)) {
+    if (skip.has(key)) continue;
+    if (value === null || value === undefined) continue;
+    if (fields.length >= 12) break;
+    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+    let format: FieldDef['format'] = undefined;
+    if (typeof value === 'boolean') format = 'boolean';
+    else if (Array.isArray(value)) format = 'list';
+    else if (typeof value === 'string' && value.startsWith('ocid1.')) format = 'ocid';
+    fields.push({ label, key, format });
+  }
+  return fields;
+}
+
 // ---------------------------------------------------------------------------
 // Field value formatter
 // ---------------------------------------------------------------------------
@@ -301,8 +323,8 @@ const RELATION_LABELS: Record<string, [string, string]> = {
 export default function DetailPanel({ resource, onClose, onNavigate }: DetailPanelProps) {
   const [showRawJson, setShowRawJson] = useState(false);
 
-  const fields = RESOURCE_FIELDS[resource.resourceType] || [];
   const rawData = resource.rawData || {};
+  const fields = RESOURCE_FIELDS[resource.resourceType] || autoExtractFields(rawData);
 
   // Merge and deduplicate relationships, showing the "other" resource
   const relations: { id: string; label: string; targetId: string; targetName: string; targetType: string }[] = [];

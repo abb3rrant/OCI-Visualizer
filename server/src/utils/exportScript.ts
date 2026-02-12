@@ -54,7 +54,7 @@ e() {
     for cid in "\${CIDS[@]}"; do
       eval "\$c --compartment-id \$cid --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
       # Remove empty arrays to save disk
-      [ -f "\$td/part_\$i.json" ] && [ "\$(jq length "\$td/part_\$i.json" 2>/dev/null||echo 0)" -eq 0 ] && rm -f "\$td/part_\$i.json"
+      jq -e 'length > 0' "\$td/part_\$i.json" >/dev/null 2>&1 || rm -f "\$td/part_\$i.json"
       i=\$((i+1))
     done
     merge_parts "\$td" "\$o" && echo " OK" || echo " empty"
@@ -70,7 +70,7 @@ ead() {
     [ -z "\$ads" ] && continue
     while IFS= read -r ad; do [ -z "\$ad" ]&&continue
       eval "\$c --compartment-id \$cid --availability-domain \\"\$ad\\" --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
-      [ -f "\$td/part_\$i.json" ] && [ "\$(jq length "\$td/part_\$i.json" 2>/dev/null||echo 0)" -eq 0 ] && rm -f "\$td/part_\$i.json"
+      jq -e 'length > 0' "\$td/part_\$i.json" >/dev/null 2>&1 || rm -f "\$td/part_\$i.json"
       i=\$((i+1))
     done <<<"\$ads"
   done

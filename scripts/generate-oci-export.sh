@@ -139,11 +139,7 @@ run_export() {
       eval "$cmd --compartment-id $cid --all $REGION_FLAG" 2>/dev/null \
         | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
       # Remove empty arrays to save disk
-      if [ -f "$td/part_$i.json" ]; then
-        local len
-        len=$(jq length "$td/part_$i.json" 2>/dev/null || echo 0)
-        [ "$len" -eq 0 ] && rm -f "$td/part_$i.json"
-      fi
+      jq -e 'length > 0' "$td/part_$i.json" >/dev/null 2>&1 || rm -f "$td/part_$i.json"
       i=$((i + 1))
     done
     merge_parts "$td" "$outfile" || echo " EMPTY (skipping)"
@@ -174,11 +170,7 @@ run_export_per_ad() {
       [ -z "$ad" ] && continue
       eval "$cmd --compartment-id $cid --availability-domain \"$ad\" --all $REGION_FLAG" 2>/dev/null \
         | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
-      if [ -f "$td/part_$i.json" ]; then
-        local len
-        len=$(jq length "$td/part_$i.json" 2>/dev/null || echo 0)
-        [ "$len" -eq 0 ] && rm -f "$td/part_$i.json"
-      fi
+      jq -e 'length > 0' "$td/part_$i.json" >/dev/null 2>&1 || rm -f "$td/part_$i.json"
       i=$((i + 1))
     done <<< "$ads"
   done

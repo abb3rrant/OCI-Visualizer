@@ -7,11 +7,13 @@ import { formatOcid, formatDate, formatResourceType } from '../../utils/formatte
 interface ResourceTableProps {
   resources: Resource[];
   loading?: boolean;
+  onRowClick?: (resource: Resource) => void;
+  selectedId?: string | null;
 }
 
 type SortKey = 'displayName' | 'resourceType' | 'lifecycleState' | 'timeCreated';
 
-export default function ResourceTable({ resources, loading }: ResourceTableProps) {
+export default function ResourceTable({ resources, loading, onRowClick, selectedId }: ResourceTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('resourceType');
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -54,7 +56,11 @@ export default function ResourceTable({ resources, loading }: ResourceTableProps
         </thead>
         <tbody className="divide-y divide-gray-100">
           {sorted.map((r) => (
-            <tr key={r.id} className="hover:bg-gray-50">
+            <tr
+              key={r.id}
+              className={`hover:bg-gray-50 ${onRowClick ? 'cursor-pointer' : ''} ${selectedId === r.id ? 'bg-blue-50' : ''}`}
+              onClick={() => onRowClick?.(r)}
+            >
               <td className="px-4 py-2"><ResourceIcon resourceType={r.resourceType} size="sm" /></td>
               <td className="px-4 py-2 font-medium text-gray-900">{r.displayName || '-'}</td>
               <td className="px-4 py-2 text-gray-600">{formatResourceType(r.resourceType)}</td>

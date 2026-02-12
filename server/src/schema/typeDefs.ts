@@ -90,6 +90,8 @@ export const typeDefs = /* GraphQL */ `
     toResourceId: String!
     relationType: String!
     metadata: JSON
+    fromResource: Resource
+    toResource: Resource
   }
 
   # ------------------------------------------------------------------

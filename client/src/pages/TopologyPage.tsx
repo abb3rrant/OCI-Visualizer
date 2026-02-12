@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useSnapshot } from '../contexts/SnapshotContext';
 import { useTopology } from '../hooks/useTopology';
 import TopologyCanvas from '../components/topology/TopologyCanvas';
+import DetailPanel from '../components/layout/DetailPanel';
 import type { ViewType } from '../types';
 import { useQuery } from 'urql';
 import { RESOURCE_QUERY, COMPARTMENTS_QUERY } from '../graphql/queries';
@@ -31,6 +32,10 @@ export default function TopologyPage() {
 
   const handleNodeClick = useCallback((nodeId: string) => {
     setSelectedResourceId(nodeId);
+  }, []);
+
+  const handleNavigateResource = useCallback((resourceId: string) => {
+    setSelectedResourceId(resourceId);
   }, []);
 
   if (!currentSnapshot) {
@@ -75,41 +80,32 @@ export default function TopologyPage() {
         </select>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 relative">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-gray-400">Loading topology...</div>
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-red-500">Error: {error.message}</div>
-          </div>
-        ) : topology ? (
-          <TopologyCanvas
-            topologyNodes={topology.nodes}
-            topologyEdges={topology.edges}
-            onNodeClick={handleNodeClick}
-          />
-        ) : null}
-
-        {/* Selected resource detail sidebar */}
-        {selectedResourceId && resourceResult.data?.resource && (
-          <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-gray-200 shadow-lg overflow-y-auto p-4">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="font-semibold text-sm">{resourceResult.data.resource.displayName || 'Unnamed'}</h3>
-              <button onClick={() => setSelectedResourceId(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {/* Canvas + detail panel */}
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 relative">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-gray-400">Loading topology...</div>
             </div>
-            <dl className="text-xs space-y-2">
-              <div><dt className="text-gray-500">Type</dt><dd>{resourceResult.data.resource.resourceType}</dd></div>
-              <div><dt className="text-gray-500">State</dt><dd>{resourceResult.data.resource.lifecycleState || '-'}</dd></div>
-              <div><dt className="text-gray-500">OCID</dt><dd className="font-mono break-all">{resourceResult.data.resource.ocid}</dd></div>
-            </dl>
-          </div>
+          ) : error ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-red-500">Error: {error.message}</div>
+            </div>
+          ) : topology ? (
+            <TopologyCanvas
+              topologyNodes={topology.nodes}
+              topologyEdges={topology.edges}
+              onNodeClick={handleNodeClick}
+            />
+          ) : null}
+        </div>
+
+        {selectedResourceId && resourceResult.data?.resource && (
+          <DetailPanel
+            resource={resourceResult.data.resource}
+            onClose={() => setSelectedResourceId(null)}
+            onNavigate={handleNavigateResource}
+          />
         )}
       </div>
     </div>

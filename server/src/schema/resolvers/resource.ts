@@ -160,5 +160,11 @@ export const resourceResolvers = {
 
   ResourceRelation: {
     metadata: (parent: any) => parseJsonField(parent.metadata),
+    fromResource: (parent: any, _args: unknown, ctx: Context) => {
+      return ctx.prisma.resource.findUnique({ where: { id: parent.fromResourceId } });
+    },
+    toResource: (parent: any, _args: unknown, ctx: Context) => {
+      return ctx.prisma.resource.findUnique({ where: { id: parent.toResourceId } });
+    },
   },
 };

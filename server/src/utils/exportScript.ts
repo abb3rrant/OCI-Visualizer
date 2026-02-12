@@ -34,7 +34,7 @@ mkdir -p "\$OUTPUT_DIR"
 echo "=== OCI Export (\${#CIDS[@]} compartments) ==="
 
 e() {
-  local n=\$1 c=\$2 o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n..."
+  local n=\$1 c=\$2; local o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n..."
   if [ \${#CIDS[@]} -eq 1 ]; then
     eval "\$c --compartment-id \${CIDS[0]} --all \$RF" >"\$o" 2>/dev/null && echo " OK" || { echo " skip"; rm -f "\$o"; }
   else
@@ -48,7 +48,7 @@ e() {
 }
 
 ead() {
-  local n=\$1 c=\$2 o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n (per-AD)..."
+  local n=\$1 c=\$2; local o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n (per-AD)..."
   local m='[]'
   for cid in "\${CIDS[@]}"; do
     local ads; ads=\$(oci iam availability-domain list --compartment-id "\$cid" \$RF 2>/dev/null|jq -r '.data[]?.name//empty' 2>/dev/null||true)
@@ -62,8 +62,7 @@ ead() {
 }
 
 epp() {
-  local n=\$1 c=\$2 pf=\$3 pk=\$4 o="\$OUTPUT_DIR/\$n.json"; echo -n "  \$n (per-parent)..."
-  local pp="\$OUTPUT_DIR/\$pf.json"
+  local n=\$1 c=\$2 pf=\$3 pk=\$4; local o="\$OUTPUT_DIR/\$n.json" pp="\$OUTPUT_DIR/\$pf.json"; echo -n "  \$n (per-parent)..."
   [ ! -f "\$pp" ] && { echo " skip (no \$pf)"; return; }
   local pids; pids=\$(jq -r ".data[]?\$pk//empty" "\$pp" 2>/dev/null||true)
   [ -z "\$pids" ] && { echo " empty"; return; }

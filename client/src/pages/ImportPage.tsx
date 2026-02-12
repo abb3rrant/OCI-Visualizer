@@ -3,17 +3,16 @@ import { useMutation, useQuery } from 'urql';
 import { useAuth } from '../contexts/AuthContext';
 import { useSnapshot } from '../contexts/SnapshotContext';
 import { CREATE_SNAPSHOT_MUTATION } from '../graphql/mutations';
-import { SNAPSHOTS_QUERY, EXPORT_SCRIPT_QUERY } from '../graphql/queries';
+import { EXPORT_SCRIPT_QUERY } from '../graphql/queries';
 import ImportWizard from '../components/import/ImportWizard';
 
 export default function ImportPage() {
   const { token } = useAuth();
-  const { setCurrentSnapshot } = useSnapshot();
+  const { setCurrentSnapshot, snapshots, refetchSnapshots } = useSnapshot();
   const [snapshotName, setSnapshotName] = useState('');
   const [snapshotDesc, setSnapshotDesc] = useState('');
   const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null);
   const [, createSnapshot] = useMutation(CREATE_SNAPSHOT_MUTATION);
-  const [snapshotsResult, reexecuteSnapshots] = useQuery({ query: SNAPSHOTS_QUERY });
   const [exportScriptResult] = useQuery({ query: EXPORT_SCRIPT_QUERY });
 
   const handleCreateSnapshot = async (e: React.FormEvent) => {
@@ -23,7 +22,7 @@ export default function ImportPage() {
     if (result.data?.createSnapshot) {
       setActiveSnapshotId(result.data.createSnapshot.id);
       setCurrentSnapshot(result.data.createSnapshot);
-      reexecuteSnapshots({ requestPolicy: 'network-only' });
+      refetchSnapshots();
     }
   };
 
@@ -83,16 +82,16 @@ export default function ImportPage() {
       ) : (
         <div className="card">
           <h3 className="text-lg font-semibold mb-3">Step 3: Upload Files</h3>
-          <ImportWizard snapshotId={activeSnapshotId} token={token} />
+          <ImportWizard snapshotId={activeSnapshotId} token={token} onComplete={refetchSnapshots} />
         </div>
       )}
 
       {/* Existing snapshots */}
-      {snapshotsResult.data?.snapshots?.length > 0 && (
+      {snapshots.length > 0 && (
         <div className="card">
           <h3 className="text-lg font-semibold mb-3">Existing Snapshots</h3>
           <div className="space-y-2">
-            {snapshotsResult.data.snapshots.map((s: any) => (
+            {snapshots.map((s: any) => (
               <div
                 key={s.id}
                 className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-blue-300 cursor-pointer"

@@ -1,12 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSnapshot } from '../contexts/SnapshotContext';
 import { useResources, useResourceCounts } from '../hooks/useResources';
 import { useQuery } from 'urql';
-import { COMPARTMENTS_QUERY } from '../graphql/queries';
+import { COMPARTMENTS_QUERY, RESOURCE_QUERY } from '../graphql/queries';
 import SearchBar from '../components/common/SearchBar';
 import FilterPanel from '../components/common/FilterPanel';
 import ResourceTable from '../components/inventory/ResourceTable';
+import DetailPanel from '../components/layout/DetailPanel';
+import type { Resource } from '../types';
 
 export default function InventoryPage() {
   const { currentSnapshot } = useSnapshot();
@@ -16,6 +18,7 @@ export default function InventoryPage() {
   const [lifecycleState, setLifecycleState] = useState('');
   const [compartmentOcid, setCompartmentOcid] = useState(searchParams.get('compartment') || '');
   const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
 
   const { counts } = useResourceCounts(currentSnapshot?.id || null);
   const resourceTypes = useMemo(() => counts.map((c: any) => c.resourceType).sort(), [counts]);
@@ -42,6 +45,21 @@ export default function InventoryPage() {
   const hasNext = connection?.pageInfo?.hasNextPage || false;
   const totalCount = connection?.totalCount || 0;
 
+  // Fetch full details for selected resource
+  const [resourceResult] = useQuery({
+    query: RESOURCE_QUERY,
+    variables: { id: selectedResourceId || '' },
+    pause: !selectedResourceId,
+  });
+
+  const handleRowClick = useCallback((resource: Resource) => {
+    setSelectedResourceId(resource.id);
+  }, []);
+
+  const handleNavigateResource = useCallback((resourceId: string) => {
+    setSelectedResourceId(resourceId);
+  }, []);
+
   // CSV export
   const handleExportCsv = () => {
     if (!resources.length) return;
@@ -66,52 +84,69 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Resource Inventory</h2>
-          <p className="text-gray-500 text-sm">{totalCount} resources</p>
-        </div>
-        <button onClick={handleExportCsv} className="btn-secondary text-sm" disabled={!resources.length}>
-          Export CSV
-        </button>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex-1"><SearchBar value={search} onChange={setSearch} /></div>
-        <select
-          value={compartmentOcid}
-          onChange={(e) => { setCompartmentOcid(e.target.value); setCursor(undefined); }}
-          className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white max-w-xs truncate"
-        >
-          <option value="">All Compartments</option>
-          {compartments.map((c: any) => (
-            <option key={c.ocid} value={c.ocid}>
-              {c.displayName || c.ocid}
-            </option>
-          ))}
-        </select>
-        <FilterPanel
-          resourceTypes={resourceTypes}
-          selectedType={resourceType}
-          onTypeChange={setResourceType}
-          selectedState={lifecycleState}
-          onStateChange={setLifecycleState}
-        />
-      </div>
-
-      <ResourceTable resources={resources} loading={loading} />
-
-      {/* Pagination */}
-      {hasNext && (
-        <div className="flex justify-center">
-          <button
-            onClick={() => setCursor(connection?.pageInfo?.endCursor || undefined)}
-            className="btn-secondary text-sm"
-          >
-            Load More
+    <div className="flex h-full -m-6">
+      {/* Main content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Resource Inventory</h2>
+            <p className="text-gray-500 text-sm">{totalCount} resources</p>
+          </div>
+          <button onClick={handleExportCsv} className="btn-secondary text-sm" disabled={!resources.length}>
+            Export CSV
           </button>
         </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex-1"><SearchBar value={search} onChange={setSearch} /></div>
+          <select
+            value={compartmentOcid}
+            onChange={(e) => { setCompartmentOcid(e.target.value); setCursor(undefined); }}
+            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white max-w-xs truncate"
+          >
+            <option value="">All Compartments</option>
+            {compartments.map((c: any) => (
+              <option key={c.ocid} value={c.ocid}>
+                {c.displayName || c.ocid}
+              </option>
+            ))}
+          </select>
+          <FilterPanel
+            resourceTypes={resourceTypes}
+            selectedType={resourceType}
+            onTypeChange={setResourceType}
+            selectedState={lifecycleState}
+            onStateChange={setLifecycleState}
+          />
+        </div>
+
+        <ResourceTable
+          resources={resources}
+          loading={loading}
+          onRowClick={handleRowClick}
+          selectedId={selectedResourceId}
+        />
+
+        {/* Pagination */}
+        {hasNext && (
+          <div className="flex justify-center">
+            <button
+              onClick={() => setCursor(connection?.pageInfo?.endCursor || undefined)}
+              className="btn-secondary text-sm"
+            >
+              Load More
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Detail panel */}
+      {selectedResourceId && resourceResult.data?.resource && (
+        <DetailPanel
+          resource={resourceResult.data.resource}
+          onClose={() => setSelectedResourceId(null)}
+          onNavigate={handleNavigateResource}
+        />
       )}
     </div>
   );

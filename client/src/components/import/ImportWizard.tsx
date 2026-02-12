@@ -5,6 +5,7 @@ import ImportProgress from './ImportProgress';
 interface ImportWizardProps {
   snapshotId: string;
   token: string | null;
+  onComplete?: () => void;
 }
 
 interface UploadResult {
@@ -13,7 +14,7 @@ interface UploadResult {
   errors: string[];
 }
 
-export default function ImportWizard({ snapshotId, token }: ImportWizardProps) {
+export default function ImportWizard({ snapshotId, token, onComplete }: ImportWizardProps) {
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState<UploadResult[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export default function ImportWizard({ snapshotId, token }: ImportWizardProps) {
     }
 
     setUploading(false);
+    onComplete?.();
   };
 
   const totalImported = results.reduce((sum, r) => sum + r.resourceCount, 0);

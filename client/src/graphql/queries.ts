@@ -80,11 +80,13 @@ export const RESOURCE_QUERY = gql`
         id
         toResourceId
         relationType
+        toResource { id displayName resourceType ocid }
       }
       relationsTo {
         id
         fromResourceId
         relationType
+        fromResource { id displayName resourceType ocid }
       }
     }
   }

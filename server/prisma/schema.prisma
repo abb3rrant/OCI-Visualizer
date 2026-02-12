@@ -1,0 +1,71 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime   @default(now())
+  snapshots    Snapshot[]
+}
+
+model Snapshot {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  importedAt  DateTime   @default(now())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id])
+  resources   Resource[]
+
+  @@index([userId])
+}
+
+model Resource {
+  id                 String   @id @default(cuid())
+  ocid               String
+  resourceType       String
+  displayName        String?
+  compartmentId      String?
+  lifecycleState     String?
+  availabilityDomain String?
+  regionKey          String?
+  timeCreated        String?
+  definedTags        String?
+  freeformTags       String?
+  rawData            String
+  snapshotId         String
+  snapshot           Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  relationsFrom      ResourceRelation[] @relation("fromResource")
+  relationsTo        ResourceRelation[] @relation("toResource")
+
+  @@unique([ocid, snapshotId])
+  @@index([resourceType])
+  @@index([compartmentId])
+  @@index([snapshotId])
+  @@index([lifecycleState])
+  @@index([displayName])
+}
+
+model ResourceRelation {
+  id             String   @id @default(cuid())
+  fromResourceId String
+  toResourceId   String
+  relationType   String
+  metadata       String?
+  fromResource   Resource @relation("fromResource", fields: [fromResourceId], references: [id], onDelete: Cascade)
+  toResource     Resource @relation("toResource", fields: [toResourceId], references: [id], onDelete: Cascade)
+
+  @@unique([fromResourceId, toResourceId, relationType])
+  @@index([fromResourceId])
+  @@index([toResourceId])
+  @@index([relationType])
+}

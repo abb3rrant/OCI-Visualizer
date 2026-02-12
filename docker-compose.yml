@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: oci_user
+      POSTGRES_PASSWORD: oci_pass
+      POSTGRES_DB: oci_visualizer
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql://oci_user:oci_pass@db:5432/oci_visualizer"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      PORT: "4000"
+      NODE_ENV: production
+    ports:
+      - "4000:4000"
+
+volumes:
+  pgdata:

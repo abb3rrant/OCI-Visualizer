@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+*.db
+*.db-journal
+.DS_Store
+*.tsbuildinfo
+coverage/
+.turbo/
+prisma/*.db
+prisma/*.db-journal

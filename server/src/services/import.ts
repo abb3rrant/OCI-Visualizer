@@ -8,7 +8,7 @@ import { buildRelationships } from './relationship.js';
 // Maps the base filename (without .json) produced by the export scripts
 // to the explicit parser type, so auto-detection is not required.
 // ---------------------------------------------------------------------------
-const FILENAME_TO_TYPE: Record<string, string> = {
+export const FILENAME_TO_TYPE: Record<string, string> = {
   // IAM
   'compartments': 'iam/compartment',
   'users': 'iam/user',

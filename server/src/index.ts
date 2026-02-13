@@ -9,7 +9,7 @@ import { readFileSync } from 'fs';
 import { schema } from './schema/index.js';
 import { getUserFromRequest, verifyToken, type AuthUser } from './middleware/auth.js';
 import { generateExportScript } from './utils/exportScript.js';
-import { importZipBuffer, importJsonString } from './services/import.js';
+import { importZipBuffer, importJsonString, FILENAME_TO_TYPE } from './services/import.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -169,7 +169,9 @@ function handleUpload(
             if (ext === '.zip') {
               results.push(await importZipBuffer(prisma, snapshotId, buffer));
             } else if (ext === '.json') {
-              results.push(await importJsonString(prisma, snapshotId, buffer.toString('utf-8')));
+              const baseName = path.basename(filename, '.json');
+              const explicitType = FILENAME_TO_TYPE[baseName];
+              results.push(await importJsonString(prisma, snapshotId, buffer.toString('utf-8'), explicitType));
             } else {
               results.push({ resourceCount: 0, resourceTypes: [], errors: [`Unsupported: ${ext}`] });
             }

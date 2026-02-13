@@ -144,8 +144,8 @@ echo "=== Containers ==="
 e oke-clusters "oci ce cluster list"
 epp node-pools "oci ce node-pool list --cluster-id" oke-clusters '.id'
 e container-instances "oci container-instances container-instance list"
-e container-repos "oci artifacts container-repository list"
-e container-images "oci artifacts container-image list"
+e container-repos "oci artifacts container repository list"
+e container-images "oci artifacts container image list"
 e image-signatures "oci artifacts container image-signature list"
 
 echo "=== Serverless ==="

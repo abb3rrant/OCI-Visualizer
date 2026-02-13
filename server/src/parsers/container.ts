@@ -5,6 +5,8 @@
  *   - OKE Clusters
  *   - Node Pools
  *   - Container Instances
+ *   - Container Repositories
+ *   - Container Images
  *   - Container Image Signatures
  */
 
@@ -18,6 +20,8 @@ import { deepCamelCase } from '../utils/camelCase.js';
 function unwrap(json: any): any[] {
   if (json && json.data !== undefined && json.data !== null) {
     if (Array.isArray(json.data)) return json.data;
+    // Handle paginated collection responses: {"data": {"items": [...]}}
+    if (typeof json.data === 'object' && Array.isArray(json.data.items)) return json.data.items;
     if (typeof json.data === 'object') return [json.data];
   }
   if (Array.isArray(json)) return json;

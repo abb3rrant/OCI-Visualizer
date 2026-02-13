@@ -192,6 +192,8 @@ const parserMap: Record<string, ParserFn> = {
 function unwrap(json: any): any[] {
   if (json && json.data !== undefined && json.data !== null) {
     if (Array.isArray(json.data)) return json.data;
+    // Handle paginated collection responses: {"data": {"items": [...]}}
+    if (typeof json.data === 'object' && Array.isArray(json.data.items)) return json.data.items;
     if (typeof json.data === 'object') return [json.data]; // single-resource envelope
   }
   if (Array.isArray(json)) return json;

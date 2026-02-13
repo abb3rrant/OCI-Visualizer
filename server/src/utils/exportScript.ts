@@ -51,7 +51,7 @@ e() {
   else
     local td; td=\$(mktemp -d); local i=0
     for cid in "\${CIDS[@]}"; do
-      eval "\$c --compartment-id \$cid --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
+      eval "\$c --compartment-id \$cid --all \$RF" 2>/dev/null | jq '.data | if type=="array" then . else (.items//[]) end' >"\$td/part_\$i.json" 2>/dev/null || true
       # Remove empty arrays to save disk
       jq -e 'length > 0' "\$td/part_\$i.json" >/dev/null 2>&1 || rm -f "\$td/part_\$i.json"
       i=\$((i+1))
@@ -68,7 +68,7 @@ ead() {
     local ads; ads=\$(oci iam availability-domain list --compartment-id "\$cid" \$RF 2>/dev/null|jq -r '.data[]?.name//empty' 2>/dev/null||true)
     [ -z "\$ads" ] && continue
     while IFS= read -r ad; do [ -z "\$ad" ]&&continue
-      eval "\$c --compartment-id \$cid --availability-domain \\"\$ad\\" --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
+      eval "\$c --compartment-id \$cid --availability-domain \\"\$ad\\" --all \$RF" 2>/dev/null | jq '.data | if type=="array" then . else (.items//[]) end' >"\$td/part_\$i.json" 2>/dev/null || true
       jq -e 'length > 0' "\$td/part_\$i.json" >/dev/null 2>&1 || rm -f "\$td/part_\$i.json"
       i=\$((i+1))
     done <<<"\$ads"
@@ -80,11 +80,11 @@ ead() {
 epp() {
   local n=\$1 c=\$2 pf=\$3 pk=\$4; local o="\$OUTPUT_DIR/\$n.json" pp="\$OUTPUT_DIR/\$pf.json"; echo -n "  \$n (per-parent)..."
   [ ! -f "\$pp" ] && { echo " skip (no \$pf)"; return; }
-  local pids; pids=\$(jq -r ".data[]?\$pk//empty" "\$pp" 2>/dev/null||true)
+  local pids; pids=\$(jq -r "(.data | if type==\"array\" then . else (.items//[]) end)[]?\$pk//empty" "\$pp" 2>/dev/null||true)
   [ -z "\$pids" ] && { echo " empty"; return; }
   local td; td=\$(mktemp -d); local i=0
   while IFS= read -r pid; do [ -z "\$pid" ]&&continue
-    eval "\$c \$pid --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
+    eval "\$c \$pid --all \$RF" 2>/dev/null | jq '.data | if type=="array" then . else (.items//[]) end' >"\$td/part_\$i.json" 2>/dev/null || true
     jq -e 'length > 0' "\$td/part_\$i.json" >/dev/null 2>&1 || rm -f "\$td/part_\$i.json"
     i=\$((i+1))
   done <<<"\$pids"

@@ -23,6 +23,9 @@ import StorageNode from './nodes/StorageNode';
 import GatewayNode from './nodes/GatewayNode';
 import GenericNode from './nodes/GenericNode';
 import SecurityNode from './nodes/SecurityNode';
+import ContainerNode from './nodes/ContainerNode';
+import ServerlessNode from './nodes/ServerlessNode';
+import IamNode from './nodes/IamNode';
 import RelationshipEdge from './edges/RelationshipEdge';
 
 const nodeTypes = {
@@ -35,6 +38,9 @@ const nodeTypes = {
   storageNode: StorageNode,
   gatewayNode: GatewayNode,
   securityNode: SecurityNode,
+  containerNode: ContainerNode,
+  serverlessNode: ServerlessNode,
+  iamNode: IamNode,
   genericNode: GenericNode,
 };
 
@@ -59,6 +65,9 @@ const nodeDimensions: Record<string, { width: number; height: number }> = {
   storageNode: { width: 140, height: 60 },
   gatewayNode: { width: 120, height: 50 },
   securityNode: { width: 130, height: 50 },
+  containerNode: { width: 150, height: 60 },
+  serverlessNode: { width: 150, height: 55 },
+  iamNode: { width: 130, height: 50 },
   genericNode: { width: 140, height: 50 },
 };
 

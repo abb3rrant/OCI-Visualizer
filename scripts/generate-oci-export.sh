@@ -294,6 +294,8 @@ echo "=== Containers ==="
 run_export "oke-clusters" "oci ce cluster list"
 run_export_per_parent "node-pools" "oci ce node-pool list --cluster-id" "oke-clusters" '.id'
 run_export "container-instances" "oci container-instances container-instance list"
+run_export "container-repos" "oci artifacts container-repository list"
+run_export "container-images" "oci artifacts container-image list"
 
 # ===================================================================
 # Serverless

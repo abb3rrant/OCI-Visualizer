@@ -69,6 +69,8 @@ import {
   parseOkeClusters,
   parseNodePools,
   parseContainerInstances,
+  parseContainerRepositories,
+  parseContainerImages,
 } from './container.js';
 
 import {
@@ -132,6 +134,8 @@ const parserMap: Record<string, ParserFn> = {
   'container/cluster': parseOkeClusters,
   'container/node-pool': parseNodePools,
   'container/container-instance': parseContainerInstances,
+  'container/container-repository': parseContainerRepositories,
+  'container/container-image': parseContainerImages,
 
   // Serverless
   'serverless/application': parseFunctionsApplications,
@@ -315,6 +319,16 @@ function detectType(items: any[]): string | null {
     return 'storage/block-volume';
   }
 
+  // Container repository: has "image-count" + "is-immutable"
+  if (has(sample, 'image-count') && has(sample, 'is-immutable')) {
+    return 'container/container-repository';
+  }
+
+  // Container image: has "repository-id" + "digest"
+  if (has(sample, 'repository-id') && has(sample, 'digest')) {
+    return 'container/container-image';
+  }
+
   // Bucket: has "namespace" + ("public-access-type" from get, or "created-by" from list)
   if (has(sample, 'namespace') && (has(sample, 'public-access-type') || has(sample, 'created-by'))) {
     return 'storage/bucket';
@@ -460,7 +474,7 @@ export { parseVcns, parseSubnets, parseSecurityLists, parseRouteTables, parseNet
 export { parseDbSystems, parseAutonomousDatabases, parseDbHomes } from './database.js';
 export { parseBlockVolumes, parseBootVolumes, parseVolumeBackups, parseVolumeGroups, parseBuckets } from './storage.js';
 export { parseLoadBalancers } from './loadbalancer.js';
-export { parseOkeClusters, parseNodePools, parseContainerInstances } from './container.js';
+export { parseOkeClusters, parseNodePools, parseContainerInstances, parseContainerRepositories, parseContainerImages } from './container.js';
 export { parseFunctionsApplications, parseFunctions, parseApiGateways, parseApiDeployments } from './serverless.js';
 export { parseCompartments, parseUsers, parseGroups, parsePolicies, parseDynamicGroups } from './iam.js';
 export { parseDnsZones } from './dns.js';

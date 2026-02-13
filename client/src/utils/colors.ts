@@ -18,13 +18,18 @@ const resourceColors: Record<string, string> = {
   'storage/bucket': '#F97316',        // orange
   'container/cluster': '#06B6D4',     // cyan
   'container/node-pool': '#67E8F9',   // light cyan
+  'container/container-instance': '#0891B2', // dark cyan
+  'container/container-repository': '#0E7490', // darker cyan
+  'container/container-image': '#155E75', // deepest cyan
   'serverless/application': '#A855F7', // violet
   'serverless/function': '#C084FC',   // light violet
   'serverless/api-gateway': '#E879F9', // fuchsia
+  'serverless/api-deployment': '#D946EF', // magenta
   'iam/compartment': '#78716C',       // stone
   'iam/user': '#A3A3A3',             // neutral
   'iam/group': '#A3A3A3',
   'iam/policy': '#FBBF24',           // yellow
+  'iam/dynamic-group': '#92400E',    // amber-dark
   'dns/zone': '#2DD4BF',             // teal
 };
 

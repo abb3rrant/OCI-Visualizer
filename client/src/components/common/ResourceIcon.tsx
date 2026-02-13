@@ -26,13 +26,18 @@ const typeInitials: Record<string, string> = {
   'storage/bucket': 'OBJ',
   'container/cluster': 'OKE',
   'container/node-pool': 'NP',
+  'container/container-instance': 'CI',
+  'container/container-repository': 'REP',
+  'container/container-image': 'IMG',
   'serverless/application': 'APP',
   'serverless/function': 'FN',
   'serverless/api-gateway': 'API',
+  'serverless/api-deployment': 'DEP',
   'iam/compartment': 'CMP',
   'iam/user': 'USR',
   'iam/group': 'GRP',
   'iam/policy': 'POL',
+  'iam/dynamic-group': 'DYN',
   'dns/zone': 'DNS',
 };
 

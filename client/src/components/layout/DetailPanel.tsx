@@ -168,6 +168,25 @@ const RESOURCE_FIELDS: Record<string, FieldDef[]> = {
     { label: 'Fault Domain', key: 'faultDomain' },
     { label: 'Restart Policy', key: 'containerRestartPolicy' },
   ],
+  'container/container-repository': [
+    { label: 'Namespace', key: 'namespace' },
+    { label: 'Image Count', key: 'imageCount' },
+    { label: 'Immutable', key: 'isImmutable', format: 'boolean' },
+    { label: 'Public', key: 'isPublic', format: 'boolean' },
+    { label: 'Layer Count', key: 'layerCount' },
+    { label: 'Layers Size (bytes)', key: 'layersSizeInBytes' },
+    { label: 'Billable Size (GB)', key: 'billableSizeInGbs' },
+    { label: 'Created By', key: 'createdBy', format: 'ocid' },
+  ],
+  'container/container-image': [
+    { label: 'Repository ID', key: 'repositoryId', format: 'ocid' },
+    { label: 'Repository Name', key: 'repositoryName' },
+    { label: 'Digest', key: 'digest' },
+    { label: 'Manifest Size (bytes)', key: 'manifestSizeInBytes' },
+    { label: 'Layers Size (bytes)', key: 'layersSizeInBytes' },
+    { label: 'Versions', key: 'versions', format: 'list' },
+    { label: 'Created By', key: 'createdBy', format: 'ocid' },
+  ],
   'serverless/application': [
     { label: 'Shape', key: 'shape' },
     { label: 'Subnet IDs', key: 'subnetIds', format: 'count' },
@@ -314,6 +333,11 @@ const RELATION_LABELS: Record<string, [string, string]> = {
   'runs-in': ['Runs in', 'Runs'],
   'uses-vcn': ['Uses VCN', 'Used by'],
   'uses-image': ['Uses image', 'Used by'],
+  'member-of': ['Member of', 'Has member'],
+  'stored-in': ['Stored in', 'Stores'],
+  'deployed-to': ['Deployed to', 'Has deployment'],
+  'backup-of': ['Backup of', 'Has backup'],
+  'groups': ['Groups', 'Grouped by'],
 };
 
 // ---------------------------------------------------------------------------

@@ -296,6 +296,115 @@ export async function buildRelationships(
         }
       }
     }
+
+    // ---------------------------------------------------------------
+    // Node pool → cluster (member-of)
+    // ---------------------------------------------------------------
+    if (resType === 'container/node-pool' && rawData.clusterId) {
+      const clusterDbId = ocidToId.get(rawData.clusterId);
+      if (clusterDbId) {
+        if (await tryCreateRelation(prisma, resId, clusterDbId, 'member-of')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Container image → repository (stored-in)
+    // ---------------------------------------------------------------
+    if (resType === 'container/container-image' && rawData.repositoryId) {
+      const repoDbId = ocidToId.get(rawData.repositoryId);
+      if (repoDbId) {
+        if (await tryCreateRelation(prisma, resId, repoDbId, 'stored-in')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // API deployment → gateway (deployed-to)
+    // ---------------------------------------------------------------
+    if (resType === 'serverless/api-deployment' && rawData.gatewayId) {
+      const gwDbId = ocidToId.get(rawData.gatewayId);
+      if (gwDbId) {
+        if (await tryCreateRelation(prisma, resId, gwDbId, 'deployed-to')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // DB home → DB system (member-of)
+    // ---------------------------------------------------------------
+    if (resType === 'database/db-home' && rawData.dbSystemId) {
+      const dbSysDbId = ocidToId.get(rawData.dbSystemId);
+      if (dbSysDbId) {
+        if (await tryCreateRelation(prisma, resId, dbSysDbId, 'member-of')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Volume backup → volume (backup-of)
+    // ---------------------------------------------------------------
+    if (resType === 'storage/volume-backup' && rawData.volumeId) {
+      const volDbId = ocidToId.get(rawData.volumeId);
+      if (volDbId) {
+        if (await tryCreateRelation(prisma, resId, volDbId, 'backup-of')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Volume group → volumes (groups)
+    // ---------------------------------------------------------------
+    if (resType === 'storage/volume-group' && Array.isArray(rawData.volumeIds)) {
+      for (const vid of rawData.volumeIds) {
+        const volDbId = ocidToId.get(vid);
+        if (volDbId) {
+          if (await tryCreateRelation(prisma, resId, volDbId, 'groups')) {
+            created++;
+          }
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Container instance → subnet (via vnics)
+    // ---------------------------------------------------------------
+    if (resType === 'container/container-instance' && Array.isArray(rawData.vnics)) {
+      for (const vnic of rawData.vnics) {
+        if (vnic?.subnetId) {
+          const subnetDbId = ocidToId.get(vnic.subnetId);
+          if (subnetDbId) {
+            if (await tryCreateRelation(prisma, resId, subnetDbId, 'subnet-member')) {
+              created++;
+            }
+          }
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Node pool → subnet (via nodeConfigDetails.placementConfigs)
+    // ---------------------------------------------------------------
+    if (resType === 'container/node-pool' && rawData.nodeConfigDetails?.placementConfigs) {
+      const configs = rawData.nodeConfigDetails.placementConfigs;
+      if (Array.isArray(configs)) {
+        for (const pc of configs) {
+          if (pc?.subnetId) {
+            const subnetDbId = ocidToId.get(pc.subnetId);
+            if (subnetDbId) {
+              if (await tryCreateRelation(prisma, resId, subnetDbId, 'subnet-member')) {
+                created++;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   return created;

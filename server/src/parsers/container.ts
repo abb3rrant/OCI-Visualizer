@@ -119,3 +119,52 @@ export function parseContainerInstances(json: any): ParsedResource[] {
     }),
   }));
 }
+
+export function parseContainerRepositories(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'container/container-repository',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: str(item['lifecycle-state']),
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({
+      namespace: item['namespace'] ?? null,
+      imageCount: item['image-count'] ?? null,
+      isImmutable: item['is-immutable'] ?? null,
+      isPublic: item['is-public'] ?? null,
+      layerCount: item['layer-count'] ?? null,
+      layersSizeInBytes: item['layers-size-in-bytes'] ?? null,
+      billableSizeInGbs: item['billable-size-in-gbs'] ?? null,
+      createdBy: item['created-by'] ?? null,
+    }),
+  }));
+}
+
+export function parseContainerImages(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'container/container-image',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: str(item['lifecycle-state']),
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({
+      repositoryId: item['repository-id'] ?? null,
+      repositoryName: item['repository-name'] ?? null,
+      digest: item['digest'] ?? null,
+      manifestSizeInBytes: item['manifest-size-in-bytes'] ?? null,
+      layersSizeInBytes: item['layers-size-in-bytes'] ?? null,
+      versions: item['versions'] ?? null,
+      createdBy: item['created-by'] ?? null,
+    }),
+  }));
+}

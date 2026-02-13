@@ -52,12 +52,31 @@ const RESOURCE_TYPE_TO_NODE_TYPE: Record<string, string> = {
   'network/security-list': 'securityNode',
   'network/route-table': 'securityNode',
   'iam/compartment': 'compartmentNode',
+  // Container / OKE
+  'container/cluster': 'containerNode',
+  'container/node-pool': 'containerNode',
+  'container/container-instance': 'containerNode',
+  'container/container-repository': 'containerNode',
+  'container/container-image': 'containerNode',
+  // Serverless
+  'serverless/application': 'serverlessNode',
+  'serverless/function': 'serverlessNode',
+  'serverless/api-gateway': 'serverlessNode',
+  'serverless/api-deployment': 'serverlessNode',
+  // IAM
+  'iam/user': 'iamNode',
+  'iam/group': 'iamNode',
+  'iam/policy': 'iamNode',
+  'iam/dynamic-group': 'iamNode',
 };
 
 function nodeTypeFor(resourceType: string): string {
   if (RESOURCE_TYPE_TO_NODE_TYPE[resourceType]) {
     return RESOURCE_TYPE_TO_NODE_TYPE[resourceType];
   }
+  if (resourceType.startsWith('container/')) return 'containerNode';
+  if (resourceType.startsWith('serverless/')) return 'serverlessNode';
+  if (resourceType.startsWith('iam/')) return 'iamNode';
   if (resourceType.startsWith('database/')) return 'databaseNode';
   if (resourceType.startsWith('storage/')) return 'storageNode';
   if (resourceType.endsWith('-gateway') || resourceType === 'network/drg') return 'gatewayNode';
@@ -88,6 +107,11 @@ const NETWORK_VIEW_TYPES = new Set([
   'network/route-table',
   'storage/block-volume',
   'storage/boot-volume',
+  'container/cluster',
+  'container/node-pool',
+  'container/container-instance',
+  'serverless/application',
+  'serverless/api-gateway',
 ]);
 
 // ---------------------------------------------------------------
@@ -219,6 +243,30 @@ async function buildNetworkView(
       const subDbId = ocidToDbId.get(rawData.subnetId);
       if (subDbId) {
         resourceVcnMap.set(r.id, subDbId); // parent = subnet
+      }
+    }
+
+    // Container instances: extract subnet from first vnic
+    if (r.resourceType === 'container/container-instance' && Array.isArray(rawData.vnics) && rawData.vnics.length > 0) {
+      const firstSubnet = rawData.vnics[0]?.subnetId;
+      if (firstSubnet && !resourceVcnMap.has(r.id)) {
+        const subDbId = ocidToDbId.get(firstSubnet);
+        if (subDbId) {
+          resourceVcnMap.set(r.id, subDbId);
+        }
+      }
+    }
+
+    // Node pools: extract subnet from first placement config
+    if (r.resourceType === 'container/node-pool' && rawData.nodeConfigDetails?.placementConfigs) {
+      const configs = rawData.nodeConfigDetails.placementConfigs;
+      if (Array.isArray(configs) && configs.length > 0 && configs[0]?.subnetId) {
+        if (!resourceVcnMap.has(r.id)) {
+          const subDbId = ocidToDbId.get(configs[0].subnetId);
+          if (subDbId) {
+            resourceVcnMap.set(r.id, subDbId);
+          }
+        }
       }
     }
 
@@ -455,6 +503,11 @@ function formatEdgeLabel(relationType: string): string {
     'runs-in': 'runs in',
     'uses-vcn': 'uses VCN',
     'uses-image': 'uses image',
+    'member-of': 'member of',
+    'stored-in': 'stored in',
+    'deployed-to': 'deployed to',
+    'backup-of': 'backup of',
+    'groups': 'groups',
   };
   return labels[relationType] ?? relationType;
 }

@@ -17,7 +17,10 @@ import { deepCamelCase } from '../utils/camelCase.js';
 // ---------------------------------------------------------------------------
 
 function unwrap(json: any): any[] {
-  if (json && Array.isArray(json.data)) return json.data;
+  if (json && json.data !== undefined && json.data !== null) {
+    if (Array.isArray(json.data)) return json.data;
+    if (typeof json.data === 'object') return [json.data];
+  }
   if (Array.isArray(json)) return json;
   if (json && typeof json === 'object') return [json];
   return [];
@@ -136,7 +139,8 @@ export function parseVolumeGroups(json: any): ParsedResource[] {
 
 export function parseBuckets(json: any): ParsedResource[] {
   return unwrap(json).map((item: any) => ({
-    ocid: item['id'] ?? item['ocid'] ?? '',
+    // Bucket list output has no "id" field — use namespace/name as stable identifier
+    ocid: item['id'] ?? item['ocid'] ?? `bucket://${item['namespace'] ?? ''}/${item['name'] ?? ''}`,
     resourceType: 'storage/bucket',
     displayName: str(item['name'] ?? item['display-name']),
     compartmentId: str(item['compartment-id']),

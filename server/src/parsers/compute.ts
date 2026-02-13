@@ -16,7 +16,10 @@ import { deepCamelCase } from '../utils/camelCase.js';
 // ---------------------------------------------------------------------------
 
 function unwrap(json: any): any[] {
-  if (json && Array.isArray(json.data)) return json.data;
+  if (json && json.data !== undefined && json.data !== null) {
+    if (Array.isArray(json.data)) return json.data;
+    if (typeof json.data === 'object') return [json.data];
+  }
   if (Array.isArray(json)) return json;
   if (json && typeof json === 'object') return [json];
   return [];

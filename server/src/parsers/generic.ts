@@ -11,13 +11,17 @@
 
 import { ParsedResource } from './index.js';
 import { deepCamelCase } from '../utils/camelCase.js';
+import { createHash } from 'crypto';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function unwrap(json: any): any[] {
-  if (json && Array.isArray(json.data)) return json.data;
+  if (json && json.data !== undefined && json.data !== null) {
+    if (Array.isArray(json.data)) return json.data;
+    if (typeof json.data === 'object') return [json.data];
+  }
   if (Array.isArray(json)) return json;
   if (json && typeof json === 'object') return [json];
   return [];
@@ -38,16 +42,32 @@ function freeform(value: unknown): Record<string, string> | null {
 /**
  * Extract a resource type slug from an OCID string.
  * OCI OCIDs follow the pattern: ocid1.<resource-type>.<realm>.<region>.<unique>
- *
- * Examples:
- *   "ocid1.vaultsecret.oc1.iad.abc123"  -> "vaultsecret"
- *   "ocid1.certificate.oc1.phx.xyz"     -> "certificate"
- *   "ocid1.waaspolicy.oc1.abc"           -> "waaspolicy"
  */
 function typeFromOcid(ocid: string): string {
   if (!ocid || !ocid.startsWith('ocid1.')) return 'unknown';
   const parts = ocid.split('.');
   return parts.length >= 2 ? parts[1] : 'unknown';
+}
+
+/**
+ * Generate a stable synthetic OCID for resources that don't have one
+ * (e.g. bucket list output uses name+namespace, not OCID).
+ */
+function syntheticOcid(item: any, index: number): string {
+  // Try to build a meaningful identifier from common fields
+  const name = item['name'] ?? item['display-name'] ?? '';
+  const namespace = item['namespace'] ?? '';
+  const compartment = item['compartment-id'] ?? '';
+
+  if (name) {
+    const key = `${namespace}/${compartment}/${name}`;
+    const hash = createHash('sha256').update(key).digest('hex').slice(0, 16);
+    return `synthetic.${hash}`;
+  }
+
+  // Last resort: hash the entire item
+  const hash = createHash('sha256').update(JSON.stringify(item) + index).digest('hex').slice(0, 16);
+  return `synthetic.${hash}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,10 +80,14 @@ export function parseGeneric(json: any): ParsedResource[] {
 
   const results: ParsedResource[] = [];
 
-  for (const item of items) {
-    // Every OCI resource must have an OCID in "id" field
-    const ocid = item['id'] ?? item['ocid'] ?? '';
-    if (!ocid) continue;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    // Get OCID or generate a synthetic one
+    let ocid = item['id'] ?? item['ocid'] ?? '';
+    if (!ocid) {
+      ocid = syntheticOcid(item, i);
+    }
 
     const ocidType = typeFromOcid(ocid);
     const resourceType = `generic/${ocidType}`;

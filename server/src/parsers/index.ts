@@ -159,7 +159,10 @@ const parserMap: Record<string, ParserFn> = {
  * Also handles plain arrays and single objects.
  */
 function unwrap(json: any): any[] {
-  if (json && Array.isArray(json.data)) return json.data;
+  if (json && json.data !== undefined && json.data !== null) {
+    if (Array.isArray(json.data)) return json.data;
+    if (typeof json.data === 'object') return [json.data]; // single-resource envelope
+  }
   if (Array.isArray(json)) return json;
   if (json && typeof json === 'object') return [json];
   return [];
@@ -312,8 +315,8 @@ function detectType(items: any[]): string | null {
     return 'storage/block-volume';
   }
 
-  // Bucket: has "namespace" + "public-access-type"
-  if (has(sample, 'namespace') && has(sample, 'public-access-type')) {
+  // Bucket: has "namespace" + ("public-access-type" from get, or "created-by" from list)
+  if (has(sample, 'namespace') && (has(sample, 'public-access-type') || has(sample, 'created-by'))) {
     return 'storage/bucket';
   }
 

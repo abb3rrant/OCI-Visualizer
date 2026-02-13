@@ -41,7 +41,17 @@ export async function importJsonString(
     return { resourceCount: 0, resourceTypes: [], errors: [`Parse error: ${message}`] };
   }
 
-  for (const resource of parsed) {
+  if (parsed.length === 0) {
+    return { resourceCount: 0, resourceTypes: [], errors: ['No resources found (unrecognised format or empty data)'] };
+  }
+
+  // Filter out resources with empty OCIDs
+  const validParsed = parsed.filter((r) => r.ocid && r.ocid.length > 0);
+  if (validParsed.length < parsed.length) {
+    errors.push(`${parsed.length - validParsed.length} resource(s) had empty OCID and were skipped`);
+  }
+
+  for (const resource of validParsed) {
     try {
       await prisma.resource.upsert({
         where: {
@@ -152,7 +162,20 @@ export async function importZipBuffer(
       continue;
     }
 
-    for (const resource of parsed) {
+    if (parsed.length === 0) {
+      errors.push(`Warning: ${entry.name} produced 0 resources (unrecognised format or empty data)`);
+      continue;
+    }
+
+    // Filter out resources with empty OCIDs — they'd collide on the unique constraint
+    const valid = parsed.filter((r) => r.ocid && r.ocid.length > 0);
+    if (valid.length < parsed.length) {
+      errors.push(
+        `Warning: ${entry.name} had ${parsed.length - valid.length} resource(s) with empty OCID (skipped)`,
+      );
+    }
+
+    for (const resource of valid) {
       try {
         await prisma.resource.upsert({
           where: {

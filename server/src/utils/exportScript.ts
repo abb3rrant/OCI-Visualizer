@@ -39,10 +39,9 @@ merge_parts() {
   local td=\$1 o=\$2
   local parts=("\$td"/part_*.json)
   if [ ! -e "\${parts[0]}" ]; then return 1; fi
-  # Stream all part files through jq, merge arrays, wrap in envelope
   jq -s 'add' "\$td"/part_*.json | jq '{data:.}' >"\$o" 2>/dev/null
-  local cnt; cnt=\$(jq '.data|length' "\$o" 2>/dev/null||echo 0)
-  [ "\$cnt" -gt 0 ] && return 0 || { rm -f "\$o"; return 1; }
+  # Verify output has data (jq on empty files exits 0 with no output so check -s first)
+  [ -s "\$o" ] && jq -e '.data and (.data|length) > 0' "\$o" >/dev/null 2>&1 && return 0 || { rm -f "\$o"; return 1; }
 }
 
 e() {
@@ -86,7 +85,7 @@ epp() {
   local td; td=\$(mktemp -d); local i=0
   while IFS= read -r pid; do [ -z "\$pid" ]&&continue
     eval "\$c \$pid --all \$RF" 2>/dev/null | jq '.data//[]' >"\$td/part_\$i.json" 2>/dev/null || true
-    [ -f "\$td/part_\$i.json" ] && [ "\$(jq length "\$td/part_\$i.json" 2>/dev/null||echo 0)" -eq 0 ] && rm -f "\$td/part_\$i.json"
+    jq -e 'length > 0' "\$td/part_\$i.json" >/dev/null 2>&1 || rm -f "\$td/part_\$i.json"
     i=\$((i+1))
   done <<<"\$pids"
   merge_parts "\$td" "\$o" && echo " OK" || echo " empty"

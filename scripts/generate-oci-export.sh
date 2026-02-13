@@ -98,10 +98,11 @@ merge_parts() {
   if [ ! -e "${parts[0]}" ]; then return 1; fi
   # Merge all arrays and wrap in envelope
   jq -s 'add' "$td"/part_*.json | jq '{data:.}' > "$outfile" 2>/dev/null
-  local cnt
-  cnt=$(jq '.data | length' "$outfile" 2>/dev/null || echo 0)
-  if [ "$cnt" -gt 0 ]; then
-    echo " OK ($cnt items)"
+  # Verify output has data (jq on empty files exits 0 with no output, so check -s first)
+  if [ -s "$outfile" ] && jq -e '.data and (.data|length) > 0' "$outfile" >/dev/null 2>&1; then
+    local cnt
+    cnt=$(jq '.data | length' "$outfile" 2>/dev/null)
+    echo " OK (${cnt:-0} items)"
     return 0
   else
     rm -f "$outfile"
@@ -213,11 +214,7 @@ run_export_per_parent() {
     [ -z "$pid" ] && continue
     eval "$child_cmd $pid --all $REGION_FLAG" 2>/dev/null \
       | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
-    if [ -f "$td/part_$i.json" ]; then
-      local len
-      len=$(jq length "$td/part_$i.json" 2>/dev/null || echo 0)
-      [ "$len" -eq 0 ] && rm -f "$td/part_$i.json"
-    fi
+    jq -e 'length > 0' "$td/part_$i.json" >/dev/null 2>&1 || rm -f "$td/part_$i.json"
     i=$((i + 1))
   done <<< "$parent_ids"
 

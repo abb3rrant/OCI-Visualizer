@@ -58,6 +58,20 @@ const typeInitials: Record<string, string> = {
   'iam/dynamic-group': 'DYN',
   // DNS
   'dns/zone': 'DNS',
+  // Security
+  'security/vault': 'VLT',
+  'security/secret': 'SEC',
+  'security/container-scan-result': 'SCN',
+  // Observability
+  'observability/log-group': 'LGR',
+  'observability/log': 'LOG',
+  // Compute (continued)
+  'compute/instance-configuration': 'IC',
+  // Container (continued)
+  'container/image-signature': 'SIG',
+  // IAM (continued)
+  'iam/api-key': 'KEY',
+  'iam/customer-secret-key': 'CSK',
 };
 
 const sizes = { sm: 'w-6 h-6 text-[10px]', md: 'w-8 h-8 text-xs', lg: 'w-10 h-10 text-sm' };

@@ -7,6 +7,8 @@
  *   - Groups
  *   - Policies
  *   - Dynamic Groups
+ *   - API Keys
+ *   - Customer Secret Keys
  */
 
 import { ParsedResource } from './index.js';
@@ -139,6 +141,46 @@ export function parseDynamicGroups(json: any): ParsedResource[] {
     rawData: deepCamelCase({
       matchingRule: item['matching-rule'] ?? null,
       description: item['description'] ?? null,
+    }),
+  }));
+}
+
+export function parseApiKeys(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['key-id'] ?? item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'iam/api-key',
+    displayName: str(item['fingerprint']),
+    compartmentId: null,
+    lifecycleState: str(item['lifecycle-state'] ?? item['state']),
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: null,
+    freeformTags: null,
+    rawData: deepCamelCase({
+      fingerprint: item['fingerprint'] ?? null,
+      keyValue: item['key-value'] ?? null,
+      userId: item['user-id'] ?? null,
+    }),
+  }));
+}
+
+export function parseCustomerSecretKeys(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'iam/customer-secret-key',
+    displayName: str(item['display-name']),
+    compartmentId: null,
+    lifecycleState: str(item['lifecycle-state'] ?? item['state']),
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: null,
+    freeformTags: null,
+    rawData: deepCamelCase({
+      userId: item['user-id'] ?? null,
+      timeExpires: item['time-expires'] ?? null,
+      inactiveStatus: item['inactive-status'] ?? null,
     }),
   }));
 }

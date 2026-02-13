@@ -231,6 +231,8 @@ run_export "users" "oci iam user list"
 run_export "groups" "oci iam group list"
 run_export "policies" "oci iam policy list"
 run_export "dynamic-groups" "oci iam dynamic-group list"
+run_export_per_parent "api-keys" "oci iam user api-key list --user-id" "users" '.id'
+run_export_per_parent "customer-secret-keys" "oci iam customer-secret-key list --user-id" "users" '.id'
 
 # ===================================================================
 # Compute
@@ -241,6 +243,7 @@ run_export "instances" "oci compute instance list"
 run_export "images" "oci compute image list"
 run_export "vnic-attachments" "oci compute vnic-attachment list"
 run_export_per_ad "boot-volume-attachments" "oci compute boot-volume-attachment list"
+run_export "instance-configurations" "oci compute-management instance-configuration list"
 
 # ===================================================================
 # Networking
@@ -288,6 +291,7 @@ run_export "db-homes" "oci db db-home list"
 echo ""
 echo "=== Load Balancer ==="
 run_export "load-balancers" "oci lb load-balancer list"
+run_export "network-load-balancers" "oci nlb network-load-balancer list"
 
 # ===================================================================
 # Containers / OKE
@@ -299,6 +303,7 @@ run_export_per_parent "node-pools" "oci ce node-pool list --cluster-id" "oke-clu
 run_export "container-instances" "oci container-instances container-instance list"
 run_export "container-repos" "oci artifacts container-repository list"
 run_export "container-images" "oci artifacts container-image list"
+run_export "image-signatures" "oci artifacts container image-signature list"
 
 # ===================================================================
 # Serverless
@@ -309,6 +314,23 @@ run_export "functions-applications" "oci fn application list"
 run_export_per_parent "functions" "oci fn function list --application-id" "functions-applications" '.id'
 run_export "api-gateways" "oci api-gateway gateway list"
 run_export_per_parent "api-deployments" "oci api-gateway deployment list --gateway-id" "api-gateways" '.id'
+
+# ===================================================================
+# Security
+# ===================================================================
+echo ""
+echo "=== Security ==="
+run_export "vaults" "oci kms management vault list"
+run_export "secrets" "oci vault secret list"
+run_export "container-scan-results" "oci vulnerability-scanning container-scan-result list"
+
+# ===================================================================
+# Observability
+# ===================================================================
+echo ""
+echo "=== Observability ==="
+run_export "log-groups" "oci logging log-group list"
+run_export_per_parent "logs" "oci logging log list --log-group-id" "log-groups" '.id'
 
 # ===================================================================
 # DNS

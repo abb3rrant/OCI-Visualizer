@@ -289,6 +289,69 @@ const RESOURCE_FIELDS: Record<string, FieldDef[]> = {
     { label: 'Scope', key: 'scope' },
     { label: 'Protected', key: 'isProtected', format: 'boolean' },
   ],
+  'network/network-load-balancer': [
+    { label: 'Subnet ID', key: 'subnetId', format: 'ocid' },
+    { label: 'Private', key: 'isPrivate', format: 'boolean' },
+    { label: 'IP Version', key: 'nlbIpVersion' },
+    { label: 'Preserve Source/Dest', key: 'isPreserveSourceDestination', format: 'boolean' },
+    { label: 'Symmetric Hash', key: 'isSymmetricHashEnabled', format: 'boolean' },
+    { label: 'IP Addresses', key: 'ipAddresses', format: 'json' },
+    { label: 'Listeners', key: 'listeners', format: 'count' },
+    { label: 'Backend Sets', key: 'backendSets', format: 'count' },
+    { label: 'NSG IDs', key: 'networkSecurityGroupIds', format: 'count' },
+  ],
+  'compute/instance-configuration': [],
+  'security/vault': [
+    { label: 'Vault Type', key: 'vaultType' },
+    { label: 'Crypto Endpoint', key: 'cryptoEndpoint' },
+    { label: 'Management Endpoint', key: 'managementEndpoint' },
+  ],
+  'security/secret': [
+    { label: 'Secret Name', key: 'secretName' },
+    { label: 'Vault ID', key: 'vaultId', format: 'ocid' },
+    { label: 'Key ID', key: 'keyId', format: 'ocid' },
+    { label: 'Description', key: 'description' },
+    { label: 'Rotation Status', key: 'rotationStatus' },
+    { label: 'Last Rotation', key: 'lastRotationTime' },
+    { label: 'Next Rotation', key: 'nextRotationTime' },
+    { label: 'Auto Generation', key: 'isAutoGenerationEnabled', format: 'boolean' },
+  ],
+  'security/container-scan-result': [
+    { label: 'Repository', key: 'repository' },
+    { label: 'Image', key: 'image' },
+    { label: 'Highest Severity', key: 'highestProblemSeverity' },
+    { label: 'Problem Count', key: 'problemCount' },
+    { label: 'Scan Target ID', key: 'containerScanTargetId', format: 'ocid' },
+    { label: 'Time Started', key: 'timeStarted' },
+    { label: 'Time Finished', key: 'timeFinished' },
+  ],
+  'observability/log-group': [
+    { label: 'Description', key: 'description' },
+    { label: 'Last Modified', key: 'timeLastModified' },
+  ],
+  'observability/log': [
+    { label: 'Log Group ID', key: 'logGroupId', format: 'ocid' },
+    { label: 'Log Type', key: 'logType' },
+    { label: 'Enabled', key: 'isEnabled', format: 'boolean' },
+    { label: 'Retention', key: 'retentionDuration' },
+    { label: 'Configuration', key: 'configuration', format: 'json' },
+    { label: 'Last Modified', key: 'timeLastModified' },
+  ],
+  'container/image-signature': [
+    { label: 'Image ID', key: 'imageId', format: 'ocid' },
+    { label: 'Signing Algorithm', key: 'signingAlgorithm' },
+    { label: 'KMS Key ID', key: 'kmsKeyId', format: 'ocid' },
+    { label: 'KMS Key Version ID', key: 'kmsKeyVersionId', format: 'ocid' },
+  ],
+  'iam/api-key': [
+    { label: 'Fingerprint', key: 'fingerprint' },
+    { label: 'User ID', key: 'userId', format: 'ocid' },
+    { label: 'Key Value', key: 'keyValue' },
+  ],
+  'iam/customer-secret-key': [
+    { label: 'User ID', key: 'userId', format: 'ocid' },
+    { label: 'Expires', key: 'timeExpires' },
+  ],
 };
 
 /**
@@ -385,6 +448,8 @@ const RELATION_LABELS: Record<string, [string, string]> = {
   'backup-of': ['Backup of', 'Has backup'],
   'groups': ['Groups', 'Grouped by'],
   'attached-to': ['Attached to', 'Has attachment'],
+  'signs': ['Signs', 'Signed by'],
+  'belongs-to': ['Belongs to', 'Has'],
 };
 
 // ---------------------------------------------------------------------------

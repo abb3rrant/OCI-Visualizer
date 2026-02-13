@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnapshot } from '../contexts/SnapshotContext';
 import { useResourceCounts } from '../hooks/useResources';
 import ResourceIcon from '../components/common/ResourceIcon';
 import { formatResourceType } from '../utils/formatters';
+import { CATEGORIES, groupCountsByCategory } from '../utils/categories';
 
 export default function DashboardPage() {
   const { currentSnapshot } = useSnapshot();
@@ -11,6 +12,25 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   const totalResources = counts.reduce((sum: number, c: any) => sum + c.count, 0);
+
+  const grouped = useMemo(() => groupCountsByCategory(counts), [counts]);
+
+  // Ordered groups following CATEGORIES order, then any remaining
+  const orderedGroups = useMemo(() => {
+    const result: { key: string; label: string; types: { resourceType: string; count: number }[] }[] = [];
+    for (const cat of CATEGORIES) {
+      const group = grouped.get(cat.key);
+      if (group && group.types.length > 0) {
+        result.push({ key: cat.key, ...group });
+      }
+    }
+    for (const [key, group] of grouped) {
+      if (!CATEGORIES.some((c) => c.key === key)) {
+        result.push({ key, ...group });
+      }
+    }
+    return result;
+  }, [grouped]);
 
   return (
     <div className="space-y-6">
@@ -40,31 +60,43 @@ export default function DashboardPage() {
             </div>
             <div className="card cursor-pointer hover:border-blue-300" onClick={() => navigate('/topology')}>
               <div className="text-sm text-gray-500">View Topology</div>
-              <div className="text-lg font-semibold text-blue-600 mt-1">Network Diagram →</div>
+              <div className="text-lg font-semibold text-blue-600 mt-1">Network Diagram &rarr;</div>
             </div>
             <div className="card cursor-pointer hover:border-blue-300" onClick={() => navigate('/audit')}>
               <div className="text-sm text-gray-500">Security Audit</div>
-              <div className="text-lg font-semibold text-blue-600 mt-1">Run Audit →</div>
+              <div className="text-lg font-semibold text-blue-600 mt-1">Run Audit &rarr;</div>
             </div>
           </div>
 
-          {/* Resource counts grid */}
+          {/* Resource counts grouped by category */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Resource Inventory</h3>
             {loading ? (
               <p className="text-gray-400">Loading...</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {counts.map((c: any) => (
-                  <div
-                    key={c.resourceType}
-                    className="card flex items-center gap-3 cursor-pointer hover:border-blue-300 !p-4"
-                    onClick={() => navigate(`/inventory?type=${encodeURIComponent(c.resourceType)}`)}
-                  >
-                    <ResourceIcon resourceType={c.resourceType} />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{formatResourceType(c.resourceType)}</div>
-                      <div className="text-xs text-gray-500">{c.count} resources</div>
+              <div className="space-y-6">
+                {orderedGroups.map((group) => (
+                  <div key={group.key}>
+                    <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      {group.label}
+                      <span className="ml-2 text-gray-400 font-normal normal-case">
+                        {group.types.reduce((s, t) => s + t.count, 0)} resources
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {group.types.map((c) => (
+                        <div
+                          key={c.resourceType}
+                          className="card flex items-center gap-3 cursor-pointer hover:border-blue-300 !p-4"
+                          onClick={() => navigate(`/inventory?type=${encodeURIComponent(c.resourceType)}`)}
+                        >
+                          <ResourceIcon resourceType={c.resourceType} />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{formatResourceType(c.resourceType)}</div>
+                            <div className="text-xs text-gray-500">{c.count} resources</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}

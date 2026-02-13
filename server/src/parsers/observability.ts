@@ -1,9 +1,9 @@
 /**
- * Load Balancer resource parsers.
+ * Observability resource parsers.
  *
  * Handles OCI CLI JSON output for:
- *   - Load Balancers
- *   - Network Load Balancers
+ *   - Log Groups
+ *   - Logs
  */
 
 import { ParsedResource } from './index.js';
@@ -39,10 +39,10 @@ function freeform(value: unknown): Record<string, string> | null {
 // Parsers
 // ---------------------------------------------------------------------------
 
-export function parseLoadBalancers(json: any): ParsedResource[] {
+export function parseLogGroups(json: any): ParsedResource[] {
   return unwrap(json).map((item: any) => ({
     ocid: item['id'] ?? item['ocid'] ?? '',
-    resourceType: 'network/load-balancer',
+    resourceType: 'observability/log-group',
     displayName: str(item['display-name']),
     compartmentId: str(item['compartment-id']),
     lifecycleState: str(item['lifecycle-state']),
@@ -52,27 +52,16 @@ export function parseLoadBalancers(json: any): ParsedResource[] {
     definedTags: tags(item['defined-tags']),
     freeformTags: freeform(item['freeform-tags']),
     rawData: deepCamelCase({
-      subnetIds: item['subnet-ids'] ?? null,
-      backendSets: item['backend-sets'] ?? null,
-      listeners: item['listeners'] ?? null,
-      shapeName: item['shape-name'] ?? null,
-      shapeDetails: item['shape-details'] ?? null,
-      ipAddresses: item['ip-addresses'] ?? null,
-      isPrivate: item['is-private'] ?? null,
-      networkSecurityGroupIds: item['network-security-group-ids'] ?? null,
-      certificates: item['certificates'] ?? null,
-      sslCipherSuites: item['ssl-cipher-suites'] ?? null,
-      pathRouteSets: item['path-route-sets'] ?? null,
-      routingPolicies: item['routing-policies'] ?? null,
-      ruleSets: item['rule-sets'] ?? null,
+      description: item['description'] ?? null,
+      timeLastModified: item['time-last-modified'] ?? null,
     }),
   }));
 }
 
-export function parseNetworkLoadBalancers(json: any): ParsedResource[] {
+export function parseLogs(json: any): ParsedResource[] {
   return unwrap(json).map((item: any) => ({
     ocid: item['id'] ?? item['ocid'] ?? '',
-    resourceType: 'network/network-load-balancer',
+    resourceType: 'observability/log',
     displayName: str(item['display-name']),
     compartmentId: str(item['compartment-id']),
     lifecycleState: str(item['lifecycle-state']),
@@ -82,15 +71,12 @@ export function parseNetworkLoadBalancers(json: any): ParsedResource[] {
     definedTags: tags(item['defined-tags']),
     freeformTags: freeform(item['freeform-tags']),
     rawData: deepCamelCase({
-      subnetId: item['subnet-id'] ?? null,
-      backendSets: item['backend-sets'] ?? null,
-      listeners: item['listeners'] ?? null,
-      ipAddresses: item['ip-addresses'] ?? null,
-      isPrivate: item['is-private'] ?? null,
-      isPreserveSourceDestination: item['is-preserve-source-destination'] ?? null,
-      isSymmetricHashEnabled: item['is-symmetric-hash-enabled'] ?? null,
-      nlbIpVersion: item['nlb-ip-version'] ?? null,
-      networkSecurityGroupIds: item['network-security-group-ids'] ?? null,
+      logGroupId: item['log-group-id'] ?? null,
+      logType: item['log-type'] ?? null,
+      configuration: item['configuration'] ?? null,
+      isEnabled: item['is-enabled'] ?? null,
+      retentionDuration: item['retention-duration'] ?? null,
+      timeLastModified: item['time-last-modified'] ?? null,
     }),
   }));
 }

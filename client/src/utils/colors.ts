@@ -50,6 +50,20 @@ const resourceColors: Record<string, string> = {
   'iam/dynamic-group': '#92400E',    // amber-dark
   // DNS
   'dns/zone': '#2DD4BF',             // teal
+  // Security
+  'security/vault': '#DC2626',        // red-600
+  'security/secret': '#B91C1C',       // red-700
+  'security/container-scan-result': '#991B1B', // red-800
+  // Observability
+  'observability/log-group': '#65A30D', // lime-600
+  'observability/log': '#4D7C0F',     // lime-700
+  // Compute (continued)
+  'compute/instance-configuration': '#93C5FD', // blue-300
+  // Container (continued)
+  'container/image-signature': '#164E63', // cyan-900
+  // IAM (continued)
+  'iam/api-key': '#78716C',           // stone-500
+  'iam/customer-secret-key': '#57534E', // stone-600
 };
 
 export function getResourceColor(resourceType: string): string {

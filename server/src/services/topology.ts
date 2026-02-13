@@ -79,8 +79,21 @@ const RESOURCE_TYPE_TO_NODE_TYPE: Record<string, string> = {
   'iam/group': 'iamNode',
   'iam/policy': 'iamNode',
   'iam/dynamic-group': 'iamNode',
+  'iam/api-key': 'iamNode',
+  'iam/customer-secret-key': 'iamNode',
   // DNS
   'dns/zone': 'gatewayNode',
+  // Compute (continued)
+  'compute/instance-configuration': 'instanceNode',
+  // Security
+  'security/vault': 'securityNode',
+  'security/secret': 'securityNode',
+  'security/container-scan-result': 'securityNode',
+  // Observability
+  'observability/log-group': 'genericNode',
+  'observability/log': 'genericNode',
+  // Container (continued)
+  'container/image-signature': 'containerNode',
 };
 
 function nodeTypeFor(resourceType: string): string {
@@ -94,6 +107,8 @@ function nodeTypeFor(resourceType: string): string {
   if (resourceType.startsWith('database/')) return 'databaseNode';
   if (resourceType.startsWith('storage/')) return 'storageNode';
   if (resourceType.startsWith('dns/')) return 'gatewayNode';
+  if (resourceType.startsWith('security/')) return 'securityNode';
+  if (resourceType.startsWith('observability/')) return 'genericNode';
   if (resourceType.endsWith('-gateway') || resourceType === 'network/drg') return 'gatewayNode';
   return 'genericNode';
 }
@@ -524,6 +539,8 @@ function formatEdgeLabel(relationType: string): string {
     'backup-of': 'backup of',
     'groups': 'groups',
     'attached-to': 'attached to',
+    'signs': 'signs',
+    'belongs-to': 'belongs to',
   };
   return labels[relationType] ?? relationType;
 }

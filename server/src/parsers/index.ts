@@ -33,6 +33,7 @@ import {
   parseImages,
   parseVnicAttachments,
   parseBootVolumeAttachments,
+  parseInstanceConfigurations,
 } from './compute.js';
 
 import {
@@ -66,7 +67,7 @@ import {
   parseBuckets,
 } from './storage.js';
 
-import { parseLoadBalancers } from './loadbalancer.js';
+import { parseLoadBalancers, parseNetworkLoadBalancers } from './loadbalancer.js';
 
 import {
   parseOkeClusters,
@@ -74,6 +75,7 @@ import {
   parseContainerInstances,
   parseContainerRepositories,
   parseContainerImages,
+  parseContainerImageSignatures,
 } from './container.js';
 
 import {
@@ -89,10 +91,15 @@ import {
   parseGroups,
   parsePolicies,
   parseDynamicGroups,
+  parseApiKeys,
+  parseCustomerSecretKeys,
 } from './iam.js';
 
 import { parseDnsZones } from './dns.js';
 import { parseGeneric } from './generic.js';
+
+import { parseVaults, parseSecrets, parseContainerScanResults } from './security.js';
+import { parseLogGroups, parseLogs } from './observability.js';
 
 // ---------------------------------------------------------------------------
 // Type-to-parser mapping (used for explicit type specification)
@@ -106,6 +113,7 @@ const parserMap: Record<string, ParserFn> = {
   'compute/image': parseImages,
   'compute/vnic-attachment': parseVnicAttachments,
   'compute/boot-volume-attachment': parseBootVolumeAttachments,
+  'compute/instance-configuration': parseInstanceConfigurations,
 
   // Network
   'network/vcn': parseVcns,
@@ -121,6 +129,7 @@ const parserMap: Record<string, ParserFn> = {
   'network/local-peering-gateway': parseLocalPeeringGateways,
   'network/dhcp-options': parseDhcpOptions,
   'network/load-balancer': parseLoadBalancers,
+  'network/network-load-balancer': parseNetworkLoadBalancers,
 
   // Database
   'database/db-system': parseDbSystems,
@@ -142,6 +151,7 @@ const parserMap: Record<string, ParserFn> = {
   'container/container-instance': parseContainerInstances,
   'container/container-repository': parseContainerRepositories,
   'container/container-image': parseContainerImages,
+  'container/image-signature': parseContainerImageSignatures,
 
   // Serverless
   'serverless/application': parseFunctionsApplications,
@@ -155,9 +165,20 @@ const parserMap: Record<string, ParserFn> = {
   'iam/group': parseGroups,
   'iam/policy': parsePolicies,
   'iam/dynamic-group': parseDynamicGroups,
+  'iam/api-key': parseApiKeys,
+  'iam/customer-secret-key': parseCustomerSecretKeys,
 
   // DNS
   'dns/zone': parseDnsZones,
+
+  // Security
+  'security/vault': parseVaults,
+  'security/secret': parseSecrets,
+  'security/container-scan-result': parseContainerScanResults,
+
+  // Observability
+  'observability/log-group': parseLogGroups,
+  'observability/log': parseLogs,
 };
 
 // ---------------------------------------------------------------------------
@@ -240,6 +261,11 @@ function detectType(items: any[]): string | null {
   // Route table: has "route-rules"
   if (has(sample, 'route-rules')) {
     return 'network/route-table';
+  }
+
+  // Network load balancer: has "subnet-id" (singular) + "nlb-ip-version"
+  if (has(sample, 'subnet-id') && has(sample, 'nlb-ip-version')) {
+    return 'network/network-load-balancer';
   }
 
   // Load balancer: has "subnet-ids" + "backend-sets"
@@ -396,6 +422,16 @@ function detectType(items: any[]): string | null {
 
   // --- IAM ---------------------------------------------------------------
 
+  // API key: has "fingerprint" + "key-value"
+  if (has(sample, 'fingerprint') && has(sample, 'key-value')) {
+    return 'iam/api-key';
+  }
+
+  // Customer secret key: has "user-id" + "time-expires" + no "vault-id" + no "secret-name"
+  if (has(sample, 'user-id') && has(sample, 'time-expires') && !has(sample, 'vault-id') && !has(sample, 'secret-name')) {
+    return 'iam/customer-secret-key';
+  }
+
   // Policy: has "statements"
   if (has(sample, 'statements')) {
     return 'iam/policy';
@@ -423,6 +459,37 @@ function detectType(items: any[]): string | null {
       !has(sample, 'statements') && !has(sample, 'matching-rule') &&
       !has(sample, 'is-accessible')) {
     return 'iam/group';
+  }
+
+  // --- Security ----------------------------------------------------------
+
+  // Vault: has "vault-type" + "crypto-endpoint"
+  if (has(sample, 'vault-type') && has(sample, 'crypto-endpoint')) {
+    return 'security/vault';
+  }
+
+  // Secret: has "vault-id" + "secret-name"
+  if (has(sample, 'vault-id') && has(sample, 'secret-name')) {
+    return 'security/secret';
+  }
+
+  // Container scan result: has "highest-problem-severity" + "problem-count"
+  if (has(sample, 'highest-problem-severity') && has(sample, 'problem-count')) {
+    return 'security/container-scan-result';
+  }
+
+  // --- Observability -----------------------------------------------------
+
+  // Log: has "log-group-id" + "log-type"
+  if (has(sample, 'log-group-id') && has(sample, 'log-type')) {
+    return 'observability/log';
+  }
+
+  // --- Container (continued) --------------------------------------------
+
+  // Image signature: has "signing-algorithm" + "signature"
+  if (has(sample, 'signing-algorithm') && has(sample, 'signature')) {
+    return 'container/image-signature';
   }
 
   // --- DNS ---------------------------------------------------------------
@@ -462,7 +529,7 @@ const OCID_PREFIX_TO_TYPE: Record<string, string> = {
   'localpeeringgateway': 'network/local-peering-gateway',
   'dhcpoptions': 'network/dhcp-options',
   'loadbalancer': 'network/load-balancer',
-  'networkloadbalancer': 'network/load-balancer',
+  'networkloadbalancer': 'network/network-load-balancer',
 
   // Database
   'dbsystem': 'database/db-system',
@@ -478,12 +545,16 @@ const OCID_PREFIX_TO_TYPE: Record<string, string> = {
   'filesystem': 'storage/file-system',
   'bucket': 'storage/bucket',
 
+  // Compute (continued)
+  'instanceconfiguration': 'compute/instance-configuration',
+
   // Container / OKE
   'cluster': 'container/cluster',
   'nodepool': 'container/node-pool',
   'computecontainerinstance': 'container/container-instance',
   'containerrepo': 'container/container-repository',
   'containerimage': 'container/container-image',
+  'containerimagesignature': 'container/image-signature',
 
   // Serverless
   'fnapp': 'serverless/application',
@@ -497,10 +568,21 @@ const OCID_PREFIX_TO_TYPE: Record<string, string> = {
   'group': 'iam/group',
   'policy': 'iam/policy',
   'dynamicgroup': 'iam/dynamic-group',
+  'apikey': 'iam/api-key',
+  'customersecretkey': 'iam/customer-secret-key',
 
   // DNS
   'dns-zone': 'dns/zone',
   'dnszone': 'dns/zone',
+
+  // Security
+  'vault': 'security/vault',
+  'secret': 'security/secret',
+  'containerscanresult': 'security/container-scan-result',
+
+  // Observability
+  'loggroup': 'observability/log-group',
+  'log': 'observability/log',
 };
 
 /**
@@ -577,16 +659,18 @@ export function parseResources(
 // Re-exports for direct access
 // ---------------------------------------------------------------------------
 
-export { parseInstances, parseImages, parseVnicAttachments, parseBootVolumeAttachments } from './compute.js';
+export { parseInstances, parseImages, parseVnicAttachments, parseBootVolumeAttachments, parseInstanceConfigurations } from './compute.js';
 export { parseVcns, parseSubnets, parseSecurityLists, parseRouteTables, parseNetworkSecurityGroups, parseInternetGateways, parseNatGateways, parseServiceGateways, parseDrgs, parseDrgAttachments, parseLocalPeeringGateways, parseDhcpOptions } from './network.js';
 export { parseDbSystems, parseAutonomousDatabases, parseMysqlDbSystems, parseDbHomes } from './database.js';
 export { parseBlockVolumes, parseBootVolumes, parseVolumeBackups, parseVolumeGroups, parseFileSystems, parseBuckets } from './storage.js';
-export { parseLoadBalancers } from './loadbalancer.js';
-export { parseOkeClusters, parseNodePools, parseContainerInstances, parseContainerRepositories, parseContainerImages } from './container.js';
+export { parseLoadBalancers, parseNetworkLoadBalancers } from './loadbalancer.js';
+export { parseOkeClusters, parseNodePools, parseContainerInstances, parseContainerRepositories, parseContainerImages, parseContainerImageSignatures } from './container.js';
 export { parseFunctionsApplications, parseFunctions, parseApiGateways, parseApiDeployments } from './serverless.js';
-export { parseCompartments, parseUsers, parseGroups, parsePolicies, parseDynamicGroups } from './iam.js';
+export { parseCompartments, parseUsers, parseGroups, parsePolicies, parseDynamicGroups, parseApiKeys, parseCustomerSecretKeys } from './iam.js';
 export { parseDnsZones } from './dns.js';
 export { parseGeneric } from './generic.js';
+export { parseVaults, parseSecrets, parseContainerScanResults } from './security.js';
+export { parseLogGroups, parseLogs } from './observability.js';
 
 /** All supported explicit resource type strings. */
 export const supportedTypes: string[] = Object.keys(parserMap);

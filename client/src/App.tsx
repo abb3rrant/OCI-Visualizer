@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage';
 import TopologyPage from './pages/TopologyPage';
 import InventoryPage from './pages/InventoryPage';
 import AuditPage from './pages/AuditPage';
+import ExplorerPage from './pages/ExplorerPage';
 import ImportPage from './pages/ImportPage';
 import AppShell from './components/layout/AppShell';
 
@@ -31,6 +32,7 @@ function AppRoutes() {
             <Route index element={<DashboardPage />} />
             <Route path="topology" element={<TopologyPage />} />
             <Route path="inventory" element={<InventoryPage />} />
+            <Route path="explorer" element={<ExplorerPage />} />
             <Route path="audit" element={<AuditPage />} />
             <Route path="import" element={<ImportPage />} />
           </Route>

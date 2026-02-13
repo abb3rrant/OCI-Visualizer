@@ -6,6 +6,7 @@
  *   - Images
  *   - VNIC Attachments
  *   - Boot Volume Attachments
+ *   - Instance Configurations
  */
 
 import { ParsedResource } from './index.js';
@@ -126,5 +127,21 @@ export function parseBootVolumeAttachments(json: any): ParsedResource[] {
       bootVolumeId: item['boot-volume-id'] ?? null,
       isPvEncryptionInTransitEnabled: item['is-pv-encryption-in-transit-enabled'] ?? null,
     }),
+  }));
+}
+
+export function parseInstanceConfigurations(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'compute/instance-configuration',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: null,
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({}),
   }));
 }

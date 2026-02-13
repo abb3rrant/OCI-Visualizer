@@ -98,12 +98,15 @@ e users "oci iam user list"
 e groups "oci iam group list"
 e policies "oci iam policy list"
 e dynamic-groups "oci iam dynamic-group list"
+epp api-keys "oci iam user api-key list --user-id" users '.id'
+epp customer-secret-keys "oci iam customer-secret-key list --user-id" users '.id'
 
 echo "=== Compute ==="
 e instances "oci compute instance list"
 e images "oci compute image list"
 e vnic-attachments "oci compute vnic-attachment list"
 ead boot-volume-attachments "oci compute boot-volume-attachment list"
+e instance-configurations "oci compute-management instance-configuration list"
 
 echo "=== Network ==="
 e vcns "oci network vcn list"
@@ -135,6 +138,7 @@ e db-homes "oci db db-home list"
 
 echo "=== Load Balancer ==="
 e load-balancers "oci lb load-balancer list"
+e network-load-balancers "oci nlb network-load-balancer list"
 
 echo "=== Containers ==="
 e oke-clusters "oci ce cluster list"
@@ -142,12 +146,22 @@ epp node-pools "oci ce node-pool list --cluster-id" oke-clusters '.id'
 e container-instances "oci container-instances container-instance list"
 e container-repos "oci artifacts container-repository list"
 e container-images "oci artifacts container-image list"
+e image-signatures "oci artifacts container image-signature list"
 
 echo "=== Serverless ==="
 e functions-applications "oci fn application list"
 epp functions "oci fn function list --application-id" functions-applications '.id'
 e api-gateways "oci api-gateway gateway list"
 epp api-deployments "oci api-gateway deployment list --gateway-id" api-gateways '.id'
+
+echo "=== Security ==="
+e vaults "oci kms management vault list"
+e secrets "oci vault secret list"
+e container-scan-results "oci vulnerability-scanning container-scan-result list"
+
+echo "=== Observability ==="
+e log-groups "oci logging log-group list"
+epp logs "oci logging log list --log-group-id" log-groups '.id'
 
 echo "=== DNS ==="
 e dns-zones "oci dns zone list"

@@ -5,6 +5,7 @@
  *   - OKE Clusters
  *   - Node Pools
  *   - Container Instances
+ *   - Container Image Signatures
  */
 
 import { ParsedResource } from './index.js';
@@ -165,6 +166,29 @@ export function parseContainerImages(json: any): ParsedResource[] {
       layersSizeInBytes: item['layers-size-in-bytes'] ?? null,
       versions: item['versions'] ?? null,
       createdBy: item['created-by'] ?? null,
+    }),
+  }));
+}
+
+export function parseContainerImageSignatures(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'container/image-signature',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: str(item['lifecycle-state']),
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({
+      imageId: item['image-id'] ?? null,
+      kmsKeyId: item['kms-key-id'] ?? null,
+      kmsKeyVersionId: item['kms-key-version-id'] ?? null,
+      signingAlgorithm: item['signing-algorithm'] ?? null,
+      signature: item['signature'] ?? null,
+      message: item['message'] ?? null,
     }),
   }));
 }

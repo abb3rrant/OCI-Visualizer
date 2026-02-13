@@ -6,6 +6,8 @@ const subtypeLabels: Record<string, { short: string; color: string }> = {
   'iam/group': { short: 'GRP', color: '#A3A3A3' },
   'iam/policy': { short: 'POL', color: '#FBBF24' },
   'iam/dynamic-group': { short: 'DYN', color: '#92400E' },
+  'iam/api-key': { short: 'KEY', color: '#78716C' },
+  'iam/customer-secret-key': { short: 'CSK', color: '#57534E' },
 };
 
 export default function IamNode({ data }: NodeProps) {

@@ -68,6 +68,28 @@ const FILENAME_TO_TYPE: Record<string, string> = {
 
   // DNS
   'dns-zones': 'dns/zone',
+
+  // Network (continued)
+  'network-load-balancers': 'network/network-load-balancer',
+
+  // Compute (continued)
+  'instance-configurations': 'compute/instance-configuration',
+
+  // Security
+  'vaults': 'security/vault',
+  'secrets': 'security/secret',
+  'container-scan-results': 'security/container-scan-result',
+
+  // Observability
+  'log-groups': 'observability/log-group',
+  'logs': 'observability/log',
+
+  // Container (continued)
+  'image-signatures': 'container/image-signature',
+
+  // IAM (continued)
+  'api-keys': 'iam/api-key',
+  'customer-secret-keys': 'iam/customer-secret-key',
 };
 
 /**

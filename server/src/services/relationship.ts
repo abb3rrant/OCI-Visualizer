@@ -429,6 +429,97 @@ export async function buildRelationships(
         }
       }
     }
+
+    // ---------------------------------------------------------------
+    // NLB backend — network load balancer → backend instances
+    // ---------------------------------------------------------------
+    if (resType === 'network/network-load-balancer' && rawData.backendSets) {
+      const backendSets =
+        typeof rawData.backendSets === 'string'
+          ? JSON.parse(rawData.backendSets)
+          : rawData.backendSets;
+
+      for (const bsName of Object.keys(backendSets)) {
+        const bs = backendSets[bsName];
+        if (Array.isArray(bs.backends)) {
+          for (const backend of bs.backends) {
+            const targetOcid = backend.instanceId || backend.targetId;
+            if (targetOcid) {
+              const targetDbId = ocidToId.get(targetOcid);
+              if (targetDbId) {
+                if (
+                  await tryCreateRelation(prisma, resId, targetDbId, 'lb-backend', {
+                    backendSet: bsName,
+                  })
+                ) {
+                  created++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Secret → vault (stored-in)
+    // ---------------------------------------------------------------
+    if (resType === 'security/secret' && rawData.vaultId) {
+      const vaultDbId = ocidToId.get(rawData.vaultId);
+      if (vaultDbId) {
+        if (await tryCreateRelation(prisma, resId, vaultDbId, 'stored-in')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Log → log group (member-of)
+    // ---------------------------------------------------------------
+    if (resType === 'observability/log' && rawData.logGroupId) {
+      const lgDbId = ocidToId.get(rawData.logGroupId);
+      if (lgDbId) {
+        if (await tryCreateRelation(prisma, resId, lgDbId, 'member-of')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Image signature → container image (signs)
+    // ---------------------------------------------------------------
+    if (resType === 'container/image-signature' && rawData.imageId) {
+      const imgDbId = ocidToId.get(rawData.imageId);
+      if (imgDbId) {
+        if (await tryCreateRelation(prisma, resId, imgDbId, 'signs')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // API key → user (belongs-to)
+    // ---------------------------------------------------------------
+    if (resType === 'iam/api-key' && rawData.userId) {
+      const userDbId = ocidToId.get(rawData.userId);
+      if (userDbId) {
+        if (await tryCreateRelation(prisma, resId, userDbId, 'belongs-to')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Customer secret key → user (belongs-to)
+    // ---------------------------------------------------------------
+    if (resType === 'iam/customer-secret-key' && rawData.userId) {
+      const userDbId = ocidToId.get(rawData.userId);
+      if (userDbId) {
+        if (await tryCreateRelation(prisma, resId, userDbId, 'belongs-to')) {
+          created++;
+        }
+      }
+    }
   }
 
   return created;

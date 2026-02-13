@@ -5,6 +5,7 @@
  *   - DB Systems
  *   - Autonomous Databases
  *   - DB Homes
+ *   - MySQL DB Systems
  */
 
 import { ParsedResource } from './index.js';
@@ -91,6 +92,38 @@ export function parseAutonomousDatabases(json: any): ParsedResource[] {
       licenseModel: item['license-model'] ?? null,
       connectionStrings: item['connection-strings'] ?? null,
       subnetId: item['subnet-id'] ?? null,
+      nsgIds: item['nsg-ids'] ?? null,
+    }),
+  }));
+}
+
+export function parseMysqlDbSystems(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'database/mysql-db-system',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: str(item['lifecycle-state']),
+    availabilityDomain: str(item['availability-domain']),
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({
+      mysqlVersion: item['mysql-version'] ?? null,
+      shapeName: item['shape-name'] ?? null,
+      subnetId: item['subnet-id'] ?? null,
+      configurationId: item['configuration-id'] ?? null,
+      isHeatWaveClusterAttached: item['is-heat-wave-cluster-attached'] ?? null,
+      isHighlyAvailable: item['is-highly-available'] ?? null,
+      port: item['port'] ?? null,
+      portX: item['port-x'] ?? null,
+      ipAddress: item['ip-address'] ?? null,
+      hostnameLabel: item['hostname-label'] ?? null,
+      dataStorageSizeInGBs: item['data-storage-size-in-gbs'] ?? null,
+      endpoints: item['endpoints'] ?? null,
+      crashRecovery: item['crash-recovery'] ?? null,
+      databaseManagement: item['database-management'] ?? null,
       nsgIds: item['nsg-ids'] ?? null,
     }),
   }));

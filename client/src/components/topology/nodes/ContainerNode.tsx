@@ -6,7 +6,7 @@ const subtypeLabels: Record<string, { short: string; color: string }> = {
   'container/node-pool': { short: 'NP', color: '#67E8F9' },
   'container/container-instance': { short: 'CI', color: '#0891B2' },
   'container/container-repository': { short: 'REP', color: '#0E7490' },
-  'container/container-image': { short: 'IMG', color: '#155E75' },
+  'container/container-image': { short: 'CIM', color: '#155E75' },
 };
 
 export default function ContainerNode({ data }: NodeProps) {

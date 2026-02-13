@@ -30,18 +30,16 @@ export interface TopologyResult {
 // ---------------------------------------------------------------
 
 const RESOURCE_TYPE_TO_NODE_TYPE: Record<string, string> = {
+  // Compute
+  'compute/instance': 'instanceNode',
+  'compute/image': 'instanceNode',
+  'compute/vnic-attachment': 'instanceNode',
+  'compute/boot-volume-attachment': 'instanceNode',
+  // Network
   'network/vcn': 'vcnNode',
   'network/subnet': 'subnetNode',
-  'compute/instance': 'instanceNode',
-  'database/db-system': 'databaseNode',
-  'database/autonomous-database': 'databaseNode',
-  'database/mysql-db-system': 'databaseNode',
   'network/load-balancer': 'loadBalancerNode',
   'network/network-load-balancer': 'loadBalancerNode',
-  'storage/block-volume': 'storageNode',
-  'storage/boot-volume': 'storageNode',
-  'storage/bucket': 'storageNode',
-  'storage/file-system': 'storageNode',
   'network/internet-gateway': 'gatewayNode',
   'network/nat-gateway': 'gatewayNode',
   'network/service-gateway': 'gatewayNode',
@@ -51,7 +49,19 @@ const RESOURCE_TYPE_TO_NODE_TYPE: Record<string, string> = {
   'network/nsg': 'securityNode',
   'network/security-list': 'securityNode',
   'network/route-table': 'securityNode',
-  'iam/compartment': 'compartmentNode',
+  'network/dhcp-options': 'securityNode',
+  // Database
+  'database/db-system': 'databaseNode',
+  'database/autonomous-database': 'databaseNode',
+  'database/mysql-db-system': 'databaseNode',
+  'database/db-home': 'databaseNode',
+  // Storage
+  'storage/block-volume': 'storageNode',
+  'storage/boot-volume': 'storageNode',
+  'storage/volume-backup': 'storageNode',
+  'storage/volume-group': 'storageNode',
+  'storage/bucket': 'storageNode',
+  'storage/file-system': 'storageNode',
   // Container / OKE
   'container/cluster': 'containerNode',
   'container/node-pool': 'containerNode',
@@ -64,21 +74,26 @@ const RESOURCE_TYPE_TO_NODE_TYPE: Record<string, string> = {
   'serverless/api-gateway': 'serverlessNode',
   'serverless/api-deployment': 'serverlessNode',
   // IAM
+  'iam/compartment': 'compartmentNode',
   'iam/user': 'iamNode',
   'iam/group': 'iamNode',
   'iam/policy': 'iamNode',
   'iam/dynamic-group': 'iamNode',
+  // DNS
+  'dns/zone': 'gatewayNode',
 };
 
 function nodeTypeFor(resourceType: string): string {
   if (RESOURCE_TYPE_TO_NODE_TYPE[resourceType]) {
     return RESOURCE_TYPE_TO_NODE_TYPE[resourceType];
   }
+  if (resourceType.startsWith('compute/')) return 'instanceNode';
   if (resourceType.startsWith('container/')) return 'containerNode';
   if (resourceType.startsWith('serverless/')) return 'serverlessNode';
   if (resourceType.startsWith('iam/')) return 'iamNode';
   if (resourceType.startsWith('database/')) return 'databaseNode';
   if (resourceType.startsWith('storage/')) return 'storageNode';
+  if (resourceType.startsWith('dns/')) return 'gatewayNode';
   if (resourceType.endsWith('-gateway') || resourceType === 'network/drg') return 'gatewayNode';
   return 'genericNode';
 }
@@ -508,6 +523,7 @@ function formatEdgeLabel(relationType: string): string {
     'deployed-to': 'deployed to',
     'backup-of': 'backup of',
     'groups': 'groups',
+    'attached-to': 'attached to',
   };
   return labels[relationType] ?? relationType;
 }

@@ -45,6 +45,7 @@ import {
   parseNatGateways,
   parseServiceGateways,
   parseDrgs,
+  parseDrgAttachments,
   parseLocalPeeringGateways,
   parseDhcpOptions,
 } from './network.js';
@@ -52,6 +53,7 @@ import {
 import {
   parseDbSystems,
   parseAutonomousDatabases,
+  parseMysqlDbSystems,
   parseDbHomes,
 } from './database.js';
 
@@ -60,6 +62,7 @@ import {
   parseBootVolumes,
   parseVolumeBackups,
   parseVolumeGroups,
+  parseFileSystems,
   parseBuckets,
 } from './storage.js';
 
@@ -114,6 +117,7 @@ const parserMap: Record<string, ParserFn> = {
   'network/nat-gateway': parseNatGateways,
   'network/service-gateway': parseServiceGateways,
   'network/drg': parseDrgs,
+  'network/drg-attachment': parseDrgAttachments,
   'network/local-peering-gateway': parseLocalPeeringGateways,
   'network/dhcp-options': parseDhcpOptions,
   'network/load-balancer': parseLoadBalancers,
@@ -121,6 +125,7 @@ const parserMap: Record<string, ParserFn> = {
   // Database
   'database/db-system': parseDbSystems,
   'database/autonomous-database': parseAutonomousDatabases,
+  'database/mysql-db-system': parseMysqlDbSystems,
   'database/db-home': parseDbHomes,
 
   // Storage
@@ -128,6 +133,7 @@ const parserMap: Record<string, ParserFn> = {
   'storage/boot-volume': parseBootVolumes,
   'storage/volume-backup': parseVolumeBackups,
   'storage/volume-group': parseVolumeGroups,
+  'storage/file-system': parseFileSystems,
   'storage/bucket': parseBuckets,
 
   // Container / OKE
@@ -266,6 +272,11 @@ function detectType(items: any[]): string | null {
     return 'network/local-peering-gateway';
   }
 
+  // DRG attachment: has "drg-id" + "drg-route-table-id"
+  if (has(sample, 'drg-id') && has(sample, 'drg-route-table-id')) {
+    return 'network/drg-attachment';
+  }
+
   // DRG: has "default-drg-route-tables" or "default-export-drg-route-distribution-id"
   if (has(sample, 'default-drg-route-tables') || has(sample, 'default-export-drg-route-distribution-id')) {
     return 'network/drg';
@@ -287,6 +298,11 @@ function detectType(items: any[]): string | null {
     return 'database/autonomous-database';
   }
 
+  // MySQL DB system: has "mysql-version" + "subnet-id" (before Oracle DB system check)
+  if (has(sample, 'mysql-version') && has(sample, 'subnet-id')) {
+    return 'database/mysql-db-system';
+  }
+
   // DB system: has "shape" + "subnet-id" + "database-edition"
   if (has(sample, 'shape') && has(sample, 'subnet-id') && has(sample, 'database-edition')) {
     return 'database/db-system';
@@ -298,6 +314,11 @@ function detectType(items: any[]): string | null {
   }
 
   // --- Storage -----------------------------------------------------------
+
+  // File system: has "metered-bytes" (unique to FSS)
+  if (has(sample, 'metered-bytes')) {
+    return 'storage/file-system';
+  }
 
   // Boot volume: has "size-in-gbs" + "image-id" (boot volumes reference the image)
   if (has(sample, 'size-in-gbs') && has(sample, 'image-id') && !has(sample, 'shape')) {
@@ -470,9 +491,9 @@ export function parseResources(
 // ---------------------------------------------------------------------------
 
 export { parseInstances, parseImages, parseVnicAttachments, parseBootVolumeAttachments } from './compute.js';
-export { parseVcns, parseSubnets, parseSecurityLists, parseRouteTables, parseNetworkSecurityGroups, parseInternetGateways, parseNatGateways, parseServiceGateways, parseDrgs, parseLocalPeeringGateways, parseDhcpOptions } from './network.js';
-export { parseDbSystems, parseAutonomousDatabases, parseDbHomes } from './database.js';
-export { parseBlockVolumes, parseBootVolumes, parseVolumeBackups, parseVolumeGroups, parseBuckets } from './storage.js';
+export { parseVcns, parseSubnets, parseSecurityLists, parseRouteTables, parseNetworkSecurityGroups, parseInternetGateways, parseNatGateways, parseServiceGateways, parseDrgs, parseDrgAttachments, parseLocalPeeringGateways, parseDhcpOptions } from './network.js';
+export { parseDbSystems, parseAutonomousDatabases, parseMysqlDbSystems, parseDbHomes } from './database.js';
+export { parseBlockVolumes, parseBootVolumes, parseVolumeBackups, parseVolumeGroups, parseFileSystems, parseBuckets } from './storage.js';
 export { parseLoadBalancers } from './loadbalancer.js';
 export { parseOkeClusters, parseNodePools, parseContainerInstances, parseContainerRepositories, parseContainerImages } from './container.js';
 export { parseFunctionsApplications, parseFunctions, parseApiGateways, parseApiDeployments } from './serverless.js';

@@ -82,6 +82,29 @@ const RESOURCE_FIELDS: Record<string, FieldDef[]> = {
     { label: 'VCN ID', key: 'vcnId', format: 'ocid' },
     { label: 'Block Traffic', key: 'blockTraffic', format: 'boolean' },
   ],
+  'network/local-peering-gateway': [
+    { label: 'VCN ID', key: 'vcnId', format: 'ocid' },
+    { label: 'Peering Status', key: 'peeringStatus' },
+    { label: 'Peer ID', key: 'peerId', format: 'ocid' },
+    { label: 'Cross-Tenancy', key: 'isCrossTenancyPeering', format: 'boolean' },
+    { label: 'Route Table ID', key: 'routeTableId', format: 'ocid' },
+  ],
+  'network/drg': [
+    { label: 'Default Route Tables', key: 'defaultDrgRouteTables', format: 'json' },
+    { label: 'Export Distribution ID', key: 'defaultExportDrgRouteDistributionId', format: 'ocid' },
+  ],
+  'network/drg-attachment': [
+    { label: 'DRG ID', key: 'drgId', format: 'ocid' },
+    { label: 'DRG Route Table ID', key: 'drgRouteTableId', format: 'ocid' },
+    { label: 'Export Distribution ID', key: 'exportDrgRouteDistributionId', format: 'ocid' },
+    { label: 'Network Details', key: 'networkDetails', format: 'json' },
+    { label: 'VCN ID', key: 'vcnId', format: 'ocid' },
+    { label: 'Cross-Tenancy', key: 'isCrossTenancy', format: 'boolean' },
+  ],
+  'network/dhcp-options': [
+    { label: 'VCN ID', key: 'vcnId', format: 'ocid' },
+    { label: 'Options', key: 'options', format: 'json' },
+  ],
   'network/load-balancer': [
     { label: 'Shape', key: 'shapeName' },
     { label: 'Private', key: 'isPrivate', format: 'boolean' },
@@ -111,6 +134,19 @@ const RESOURCE_FIELDS: Record<string, FieldDef[]> = {
     { label: 'Free Tier', key: 'isFreeTier', format: 'boolean' },
     { label: 'License', key: 'licenseModel' },
   ],
+  'database/mysql-db-system': [
+    { label: 'MySQL Version', key: 'mysqlVersion' },
+    { label: 'Shape', key: 'shapeName' },
+    { label: 'Subnet ID', key: 'subnetId', format: 'ocid' },
+    { label: 'HeatWave Attached', key: 'isHeatWaveClusterAttached', format: 'boolean' },
+    { label: 'Highly Available', key: 'isHighlyAvailable', format: 'boolean' },
+    { label: 'Port', key: 'port' },
+    { label: 'Port X', key: 'portX' },
+    { label: 'IP Address', key: 'ipAddress' },
+    { label: 'Storage (GB)', key: 'dataStorageSizeInGBs' },
+    { label: 'Endpoints', key: 'endpoints', format: 'json' },
+    { label: 'Crash Recovery', key: 'crashRecovery' },
+  ],
   'database/db-home': [
     { label: 'DB System ID', key: 'dbSystemId', format: 'ocid' },
     { label: 'DB Version', key: 'dbVersion' },
@@ -139,6 +175,16 @@ const RESOURCE_FIELDS: Record<string, FieldDef[]> = {
   'storage/volume-group': [
     { label: 'Volumes', key: 'volumeIds', format: 'count' },
     { label: 'Size (GB)', key: 'sizeInGBs' },
+  ],
+  'storage/file-system': [
+    { label: 'Metered Bytes', key: 'meteredBytes' },
+    { label: 'Clone Parent', key: 'isCloneParent', format: 'boolean' },
+    { label: 'Hydrated', key: 'isHydrated', format: 'boolean' },
+    { label: 'Targetable', key: 'isTargetable', format: 'boolean' },
+    { label: 'Clone Count', key: 'cloneCount' },
+    { label: 'Clone Attach Status', key: 'cloneAttachStatus' },
+    { label: 'Snapshot Policy ID', key: 'filesystemSnapshotPolicyId', format: 'ocid' },
+    { label: 'KMS Key', key: 'kmsKeyId', format: 'ocid' },
   ],
   'storage/bucket': [
     { label: 'Namespace', key: 'namespace' },
@@ -338,6 +384,7 @@ const RELATION_LABELS: Record<string, [string, string]> = {
   'deployed-to': ['Deployed to', 'Has deployment'],
   'backup-of': ['Backup of', 'Has backup'],
   'groups': ['Groups', 'Grouped by'],
+  'attached-to': ['Attached to', 'Has attachment'],
 };
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@
  *   - Volume Backups
  *   - Volume Groups
  *   - Buckets (Object Storage)
+ *   - File Systems
  */
 
 import { ParsedResource } from './index.js';
@@ -133,6 +134,32 @@ export function parseVolumeGroups(json: any): ParsedResource[] {
       sizeInGBs: item['size-in-gbs'] ?? null,
       sizeInMBs: item['size-in-mbs'] ?? null,
       sourceDetails: item['source-details'] ?? null,
+    }),
+  }));
+}
+
+export function parseFileSystems(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'storage/file-system',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: str(item['lifecycle-state']),
+    availabilityDomain: str(item['availability-domain']),
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({
+      meteredBytes: item['metered-bytes'] ?? null,
+      isCloneParent: item['is-clone-parent'] ?? null,
+      isHydrated: item['is-hydrated'] ?? null,
+      isTargetable: item['is-targetable'] ?? null,
+      cloneCount: item['clone-count'] ?? null,
+      cloneAttachStatus: item['clone-attach-status'] ?? null,
+      filesystemSnapshotPolicyId: item['filesystem-snapshot-policy-id'] ?? null,
+      replicationTargetId: item['replication-target-id'] ?? null,
+      kmsKeyId: item['kms-key-id'] ?? null,
     }),
   }));
 }

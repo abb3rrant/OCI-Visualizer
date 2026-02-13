@@ -405,6 +405,30 @@ export async function buildRelationships(
         }
       }
     }
+
+    // ---------------------------------------------------------------
+    // DRG attachment → DRG (attached-to)
+    // ---------------------------------------------------------------
+    if (resType === 'network/drg-attachment' && rawData.drgId) {
+      const drgDbId = ocidToId.get(rawData.drgId);
+      if (drgDbId) {
+        if (await tryCreateRelation(prisma, resId, drgDbId, 'attached-to')) {
+          created++;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // DRG attachment → VCN (gateway-for)
+    // ---------------------------------------------------------------
+    if (resType === 'network/drg-attachment' && rawData.vcnId) {
+      const vcnDbId = ocidToId.get(rawData.vcnId);
+      if (vcnDbId) {
+        if (await tryCreateRelation(prisma, resId, vcnDbId, 'gateway-for')) {
+          created++;
+        }
+      }
+    }
   }
 
   return created;

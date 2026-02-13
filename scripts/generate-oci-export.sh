@@ -256,6 +256,7 @@ run_export "internet-gateways" "oci network internet-gateway list"
 run_export "nat-gateways" "oci network nat-gateway list"
 run_export "service-gateways" "oci network service-gateway list"
 run_export "drgs" "oci network drg list"
+run_export "drg-attachments" "oci network drg-attachment list"
 run_export "local-peering-gateways" "oci network local-peering-gateway list"
 run_export "dhcp-options" "oci network dhcp-options list"
 
@@ -268,6 +269,7 @@ run_export "block-volumes" "oci bv volume list"
 run_export_per_ad "boot-volumes" "oci bv boot-volume list"
 run_export "volume-backups" "oci bv backup list"
 run_export "volume-groups" "oci bv volume-group list"
+run_export_per_ad "file-systems" "oci fs file-system list"
 run_export "buckets" "oci os bucket list"
 
 # ===================================================================
@@ -277,6 +279,7 @@ echo ""
 echo "=== Database ==="
 run_export "db-systems" "oci db system list"
 run_export "autonomous-databases" "oci db autonomous-database list"
+run_export "mysql-db-systems" "oci mysql db-system list"
 run_export "db-homes" "oci db db-home list"
 
 # ===================================================================

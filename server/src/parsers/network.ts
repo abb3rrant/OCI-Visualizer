@@ -11,6 +11,7 @@
  *   - NAT Gateways
  *   - Service Gateways
  *   - DRGs
+ *   - DRG Attachments
  *   - Local Peering Gateways
  *   - DHCP Options
  */
@@ -230,6 +231,30 @@ export function parseDrgs(json: any): ParsedResource[] {
       defaultDrgRouteTables: item['default-drg-route-tables'] ?? null,
       defaultExportDrgRouteDistributionId:
         item['default-export-drg-route-distribution-id'] ?? null,
+    }),
+  }));
+}
+
+export function parseDrgAttachments(json: any): ParsedResource[] {
+  return unwrap(json).map((item: any) => ({
+    ocid: item['id'] ?? item['ocid'] ?? '',
+    resourceType: 'network/drg-attachment',
+    displayName: str(item['display-name']),
+    compartmentId: str(item['compartment-id']),
+    lifecycleState: str(item['lifecycle-state'] ?? item['state']),
+    availabilityDomain: null,
+    regionKey: null,
+    timeCreated: str(item['time-created']),
+    definedTags: tags(item['defined-tags']),
+    freeformTags: freeform(item['freeform-tags']),
+    rawData: deepCamelCase({
+      drgId: item['drg-id'] ?? null,
+      drgRouteTableId: item['drg-route-table-id'] ?? null,
+      exportDrgRouteDistributionId: item['export-drg-route-distribution-id'] ?? null,
+      networkDetails: item['network-details'] ?? null,
+      vcnId: item['vcn-id'] ?? null,
+      isCrossTenancy: item['is-cross-tenancy'] ?? null,
+      routeTableId: item['route-table-id'] ?? null,
     }),
   }));
 }

@@ -102,7 +102,7 @@ export interface TagReport {
   compliantResources: number;
   nonCompliantResources: number;
   tagCoverage: TagCoverage[];
-  missingTagResources: Resource[];
+  missingTagResources?: Resource[];
 }
 
 export interface ResourceCount {

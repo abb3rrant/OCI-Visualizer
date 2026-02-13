@@ -3,6 +3,85 @@ import { parseResources, ParsedResource } from '../parsers/index.js';
 import { extractZip } from '../utils/zipHandler.js';
 import { buildRelationships } from './relationship.js';
 
+// ---------------------------------------------------------------------------
+// Filename → resource type mapping for ZIP imports
+// Maps the base filename (without .json) produced by the export scripts
+// to the explicit parser type, so auto-detection is not required.
+// ---------------------------------------------------------------------------
+const FILENAME_TO_TYPE: Record<string, string> = {
+  // IAM
+  'compartments': 'iam/compartment',
+  'users': 'iam/user',
+  'groups': 'iam/group',
+  'policies': 'iam/policy',
+  'dynamic-groups': 'iam/dynamic-group',
+
+  // Compute
+  'instances': 'compute/instance',
+  'images': 'compute/image',
+  'vnic-attachments': 'compute/vnic-attachment',
+  'boot-volume-attachments': 'compute/boot-volume-attachment',
+
+  // Network
+  'vcns': 'network/vcn',
+  'subnets': 'network/subnet',
+  'security-lists': 'network/security-list',
+  'route-tables': 'network/route-table',
+  'nsgs': 'network/nsg',
+  'internet-gateways': 'network/internet-gateway',
+  'nat-gateways': 'network/nat-gateway',
+  'service-gateways': 'network/service-gateway',
+  'drgs': 'network/drg',
+  'drg-attachments': 'network/drg-attachment',
+  'local-peering-gateways': 'network/local-peering-gateway',
+  'dhcp-options': 'network/dhcp-options',
+
+  // Load Balancer
+  'load-balancers': 'network/load-balancer',
+
+  // Storage
+  'block-volumes': 'storage/block-volume',
+  'boot-volumes': 'storage/boot-volume',
+  'volume-backups': 'storage/volume-backup',
+  'volume-groups': 'storage/volume-group',
+  'file-systems': 'storage/file-system',
+  'buckets': 'storage/bucket',
+
+  // Database
+  'db-systems': 'database/db-system',
+  'autonomous-databases': 'database/autonomous-database',
+  'mysql-db-systems': 'database/mysql-db-system',
+  'db-homes': 'database/db-home',
+
+  // Container / OKE
+  'oke-clusters': 'container/cluster',
+  'node-pools': 'container/node-pool',
+  'container-instances': 'container/container-instance',
+  'container-repos': 'container/container-repository',
+  'container-images': 'container/container-image',
+
+  // Serverless
+  'functions-applications': 'serverless/application',
+  'functions': 'serverless/function',
+  'api-gateways': 'serverless/api-gateway',
+  'api-deployments': 'serverless/api-deployment',
+
+  // DNS
+  'dns-zones': 'dns/zone',
+};
+
+/**
+ * Extract the base filename (without extension and directory path) from a ZIP entry name.
+ * e.g. "oci-export/oke-clusters.json" → "oke-clusters"
+ */
+function baseNameFromEntry(entryName: string): string {
+  // Strip directory path
+  const lastSlash = entryName.lastIndexOf('/');
+  const filename = lastSlash >= 0 ? entryName.substring(lastSlash + 1) : entryName;
+  // Strip .json extension
+  return filename.replace(/\.json$/i, '');
+}
+
 export interface ImportResult {
   resourceCount: number;
   resourceTypes: string[];
@@ -153,9 +232,14 @@ export async function importZipBuffer(
       continue;
     }
 
+    // Derive explicit type from the ZIP entry filename so we don't rely
+    // solely on auto-detection (which can misfire for ambiguous schemas).
+    const baseName = baseNameFromEntry(entry.name);
+    const explicitType = FILENAME_TO_TYPE[baseName];
+
     let parsed: ParsedResource[];
     try {
-      parsed = parseResources(rawJson);
+      parsed = parseResources(rawJson, explicitType);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       errors.push(`Parse error in ${entry.name}: ${message}`);

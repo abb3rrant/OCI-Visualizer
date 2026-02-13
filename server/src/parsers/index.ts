@@ -436,6 +436,92 @@ function detectType(items: any[]): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// OCID prefix → resource type fallback
+// When field-based auto-detection fails, we can still identify the resource
+// type from the OCID pattern: ocid1.<resource-type>.<realm>.<region>.<id>
+// ---------------------------------------------------------------------------
+
+const OCID_PREFIX_TO_TYPE: Record<string, string> = {
+  // Compute
+  'instance': 'compute/instance',
+  'image': 'compute/image',
+  'vnicattachment': 'compute/vnic-attachment',
+  'bootvolumeattachment': 'compute/boot-volume-attachment',
+
+  // Network
+  'vcn': 'network/vcn',
+  'subnet': 'network/subnet',
+  'securitylist': 'network/security-list',
+  'routetable': 'network/route-table',
+  'networksecuritygroup': 'network/nsg',
+  'internetgateway': 'network/internet-gateway',
+  'natgateway': 'network/nat-gateway',
+  'servicegateway': 'network/service-gateway',
+  'drg': 'network/drg',
+  'drgattachment': 'network/drg-attachment',
+  'localpeeringgateway': 'network/local-peering-gateway',
+  'dhcpoptions': 'network/dhcp-options',
+  'loadbalancer': 'network/load-balancer',
+  'networkloadbalancer': 'network/load-balancer',
+
+  // Database
+  'dbsystem': 'database/db-system',
+  'autonomousdatabase': 'database/autonomous-database',
+  'mysqldbsystem': 'database/mysql-db-system',
+  'dbhome': 'database/db-home',
+
+  // Storage
+  'volume': 'storage/block-volume',
+  'bootvolume': 'storage/boot-volume',
+  'volumebackup': 'storage/volume-backup',
+  'volumegroup': 'storage/volume-group',
+  'filesystem': 'storage/file-system',
+  'bucket': 'storage/bucket',
+
+  // Container / OKE
+  'cluster': 'container/cluster',
+  'nodepool': 'container/node-pool',
+  'computecontainerinstance': 'container/container-instance',
+  'containerrepo': 'container/container-repository',
+  'containerimage': 'container/container-image',
+
+  // Serverless
+  'fnapp': 'serverless/application',
+  'fnfunc': 'serverless/function',
+  'apigateway': 'serverless/api-gateway',
+  'apideployment': 'serverless/api-deployment',
+
+  // IAM
+  'compartment': 'iam/compartment',
+  'user': 'iam/user',
+  'group': 'iam/group',
+  'policy': 'iam/policy',
+  'dynamicgroup': 'iam/dynamic-group',
+
+  // DNS
+  'dns-zone': 'dns/zone',
+  'dnszone': 'dns/zone',
+};
+
+/**
+ * Try to determine the resource type from the OCID prefix of the first item.
+ * OCID format: ocid1.<resource-type>.<realm>.<region>.<unique-id>
+ */
+function detectTypeFromOcid(items: any[]): string | null {
+  if (items.length === 0) return null;
+
+  const sample = items[0];
+  const ocid: string = sample['id'] ?? sample['ocid'] ?? '';
+  if (!ocid || !ocid.startsWith('ocid1.')) return null;
+
+  const parts = ocid.split('.');
+  if (parts.length < 2) return null;
+
+  const ocidType = parts[1]; // e.g. "vcn", "instance", "fnapp"
+  return OCID_PREFIX_TO_TYPE[ocidType] ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -471,12 +557,13 @@ export function parseResources(
     return parser(json);
   }
 
-  // Otherwise, attempt auto-detection.
+  // Otherwise, attempt auto-detection using field signatures first,
+  // then OCID prefix as a second-pass fallback.
   const items = unwrap(json);
-  const detectedType = detectType(items);
+
+  const detectedType = detectType(items) ?? detectTypeFromOcid(items);
   if (!detectedType) {
-    // Fallback: generic parser for unrecognised OCI resources.
-    // Extracts common fields and infers type from OCID prefix.
+    // Last resort: generic parser for truly unrecognised OCI resources.
     return parseGeneric(json);
   }
 

@@ -10,36 +10,8 @@
  */
 
 import { ParsedResource } from './index.js';
-import { deepCamelCase } from '../utils/camelCase.js';
+import { unwrap, str, tags, freeform, deepCamelCase } from './helpers.js';
 import { createHash } from 'crypto';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function unwrap(json: any): any[] {
-  if (json && json.data !== undefined && json.data !== null) {
-    if (Array.isArray(json.data)) return json.data;
-    // Handle paginated collection responses: {"data": {"items": [...]}}
-    if (typeof json.data === 'object' && Array.isArray(json.data.items)) return json.data.items;
-    if (typeof json.data === 'object') return [json.data];
-  }
-  if (Array.isArray(json)) return json;
-  if (json && typeof json === 'object') return [json];
-  return [];
-}
-
-function str(value: unknown): string | null {
-  return value === undefined || value === null ? null : String(value);
-}
-
-function tags(value: unknown): Record<string, any> | null {
-  return value && typeof value === 'object' ? (value as Record<string, any>) : null;
-}
-
-function freeform(value: unknown): Record<string, string> | null {
-  return value && typeof value === 'object' ? (value as Record<string, string>) : null;
-}
 
 /**
  * Extract a resource type slug from an OCID string.

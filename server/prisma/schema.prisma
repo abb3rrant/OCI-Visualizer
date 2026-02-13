@@ -46,6 +46,7 @@ model Resource {
 
   relationsFrom      ResourceRelation[] @relation("fromResource")
   relationsTo        ResourceRelation[] @relation("toResource")
+  blobs              ResourceBlob[]
 
   @@unique([ocid, snapshotId])
   @@index([resourceType])
@@ -53,6 +54,31 @@ model Resource {
   @@index([snapshotId])
   @@index([lifecycleState])
   @@index([displayName])
+}
+
+model ImportJob {
+  id            String   @id @default(cuid())
+  snapshotId    String
+  status        String   @default("pending")
+  progress      Int      @default(0)
+  total         Int      @default(0)
+  resourceTypes String?
+  errors        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([snapshotId])
+}
+
+model ResourceBlob {
+  id         String   @id @default(cuid())
+  resourceId String
+  blobKey    String
+  content    String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, blobKey])
+  @@index([resourceId])
 }
 
 model ResourceRelation {
@@ -68,4 +94,6 @@ model ResourceRelation {
   @@index([fromResourceId])
   @@index([toResourceId])
   @@index([relationType])
+  @@index([fromResourceId, relationType])
+  @@index([toResourceId, relationType])
 }

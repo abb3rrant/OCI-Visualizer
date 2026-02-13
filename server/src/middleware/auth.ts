@@ -1,5 +1,12 @@
 import jwt from 'jsonwebtoken';
 
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable must be set in production');
+  }
+  console.warn('WARNING: JWT_SECRET not set, using insecure default. Do NOT use in production.');
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 export interface AuthUser {

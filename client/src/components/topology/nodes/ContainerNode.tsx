@@ -10,7 +10,7 @@ const subtypeLabels: Record<string, { short: string; color: string }> = {
   'container/image-signature': { short: 'SIG', color: '#164E63' },
 };
 
-export default function ContainerNode({ data }: NodeProps) {
+export default React.memo(function ContainerNode({ data }: NodeProps) {
   const d = data as any;
   const info = subtypeLabels[d?.resourceType] || { short: 'CTR', color: '#06B6D4' };
 
@@ -19,7 +19,7 @@ export default function ContainerNode({ data }: NodeProps) {
     (d?.metadata?.imageCount != null ? `${d.metadata.imageCount} images` : null);
 
   return (
-    <div className="bg-white border-2 rounded-lg p-2.5 min-w-[130px] shadow-sm" style={{ borderColor: info.color }}>
+    <div className="bg-white dark:bg-gray-800 border-2 rounded-lg p-2.5 min-w-[130px] shadow-sm" style={{ borderColor: info.color }}>
       <div className="flex items-center gap-2">
         <span
           className="w-6 h-6 rounded-lg text-white text-[9px] flex items-center justify-center font-bold"
@@ -28,12 +28,12 @@ export default function ContainerNode({ data }: NodeProps) {
           {info.short}
         </span>
         <div className="min-w-0">
-          <div className="text-xs font-semibold truncate max-w-[110px]">{d?.label || 'Container'}</div>
-          {subtitle && <div className="text-[10px] text-gray-500 truncate">{subtitle}</div>}
+          <div className="text-xs font-semibold truncate max-w-[110px] dark:text-gray-200">{d?.label || 'Container'}</div>
+          {subtitle && <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{subtitle}</div>}
         </div>
       </div>
       <Handle type="target" position={Position.Top} className="!w-2 !h-2" style={{ background: info.color }} />
       <Handle type="source" position={Position.Bottom} className="!w-2 !h-2" style={{ background: info.color }} />
     </div>
   );
-}
+});

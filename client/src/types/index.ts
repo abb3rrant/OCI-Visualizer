@@ -29,6 +29,12 @@ export interface Resource {
   relationsTo?: ResourceRelation[];
 }
 
+export interface ResourceBlob {
+  id: string;
+  blobKey: string;
+  content: string;
+}
+
 export interface ResourceRelation {
   id: string;
   fromResourceId: string;
@@ -68,19 +74,25 @@ export interface Topology {
   edges: TopologyEdge[];
 }
 
-export interface AuditFinding {
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+export interface AffectedResource {
+  id: string;
+  ocid: string;
+  name: string | null;
+}
+
+export interface GroupedAuditFinding {
+  severity: Severity;
   category: string;
   title: string;
   description: string;
-  resourceId: string | null;
-  resourceOcid: string | null;
-  resourceName: string | null;
   recommendation: string;
+  count: number;
+  resources: AffectedResource[];
+  framework: string | null;
 }
 
 export interface AuditReport {
-  findings: AuditFinding[];
+  groupedFindings: GroupedAuditFinding[];
   summary: {
     critical: number;
     high: number;
@@ -116,5 +128,34 @@ export interface ImportResult {
   errors: string[];
 }
 
-export type ViewType = 'NETWORK' | 'COMPARTMENT' | 'DEPENDENCY';
+export type ViewType = 'NETWORK' | 'COMPARTMENT' | 'DEPENDENCY' | 'EXPOSURE' | 'REACHABILITY';
+export type HopStatus = 'ALLOW' | 'DENY' | 'UNKNOWN';
+export type Verdict = 'REACHABLE' | 'BLOCKED' | 'PARTIAL' | 'UNKNOWN';
+
+export interface ReachabilityHop {
+  id: string;
+  type: string;
+  label: string;
+  resourceType: string;
+  ocid: string;
+  status: HopStatus;
+  details: string;
+  metadata: Record<string, any> | null;
+}
+
+export interface ReachabilityLink {
+  id: string;
+  source: string;
+  target: string;
+  status: HopStatus;
+  label: string;
+}
+
+export interface ReachabilityResult {
+  hops: ReachabilityHop[];
+  links: ReachabilityLink[];
+  verdict: Verdict;
+  verdictDetail: string;
+}
+
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';

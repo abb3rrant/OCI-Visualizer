@@ -16,7 +16,8 @@
 #   -r  Region (defaults to CLI default region)
 #   -o  Output directory (defaults to ./oci-export-TIMESTAMP)
 
-set -euo pipefail
+# No strict mode — the script handles errors explicitly with || true guards.
+# set -euo pipefail caused premature exits with multi-compartment exports.
 
 # Defaults
 COMPARTMENT_ID=""
@@ -41,6 +42,22 @@ while getopts "c:f:r:o:h" opt; do
     *) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
   esac
 done
+shift $((OPTIND - 1))
+
+# If a positional argument remains and no -f/-c was given, treat it as a compartment file
+if [ $# -gt 0 ] && [ -z "$COMPARTMENT_FILE" ] && [ -z "$COMPARTMENT_ID" ]; then
+  if [ -f "$1" ]; then
+    COMPARTMENT_FILE="$1"
+    echo "Using positional argument as compartment file: $1"
+  else
+    # Might be a bare compartment OCID
+    COMPARTMENT_ID="$1"
+    echo "Using positional argument as compartment OCID: $1"
+  fi
+elif [ $# -gt 0 ]; then
+  echo "WARNING: Ignoring extra arguments: $*"
+  echo "         (already have -c or -f flag)"
+fi
 
 # Build compartment list
 COMPARTMENT_IDS=()
@@ -50,16 +67,20 @@ if [ -n "$COMPARTMENT_FILE" ]; then
     echo "ERROR: Compartment file not found: $COMPARTMENT_FILE"
     exit 1
   fi
-  while IFS= read -r line || [ -n "$line" ]; do
-    line=$(echo "$line" | xargs)  # trim whitespace
+  # Read file, handling newline, comma, space, or tab-separated OCIDs.
+  # Also strips BOM, \r, and trims whitespace.
+  file_content=$(cat "$COMPARTMENT_FILE" | tr -d '\xEF\xBB\xBF' | tr -d '\r' | tr ',' '\n' | tr '\t' '\n')
+  while IFS= read -r line; do
+    line=$(echo "$line" | xargs 2>/dev/null || echo "$line")   # trim whitespace
     [ -z "$line" ] && continue
     [[ "$line" == \#* ]] && continue  # skip comments
     COMPARTMENT_IDS+=("$line")
-  done < "$COMPARTMENT_FILE"
+  done <<< "$file_content"
   if [ ${#COMPARTMENT_IDS[@]} -eq 0 ]; then
     echo "ERROR: No compartment OCIDs found in $COMPARTMENT_FILE"
     exit 1
   fi
+  echo "Loaded ${#COMPARTMENT_IDS[@]} compartment(s) from $COMPARTMENT_FILE"
 elif [ -n "$COMPARTMENT_ID" ]; then
   COMPARTMENT_IDS=("$COMPARTMENT_ID")
 else
@@ -80,10 +101,15 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 echo "=== OCI Resource Export ==="
-echo "Compartments: ${#COMPARTMENT_IDS[@]}"
-for cid in "${COMPARTMENT_IDS[@]}"; do
-  echo "  - $cid"
-done
+if [ ${#COMPARTMENT_IDS[@]} -eq 1 ]; then
+  echo "Mode: SINGLE compartment"
+  echo "  ${COMPARTMENT_IDS[0]}"
+else
+  echo "Mode: MULTI compartment (${#COMPARTMENT_IDS[@]} compartments)"
+  for cid in "${COMPARTMENT_IDS[@]}"; do
+    echo "  - $cid"
+  done
+fi
 echo "Output: $OUTPUT_DIR"
 echo ""
 
@@ -97,11 +123,14 @@ merge_parts() {
   local parts=("$td"/part_*.json)
   if [ ! -e "${parts[0]}" ]; then return 1; fi
   # Merge all arrays and wrap in envelope
-  jq -s 'add' "$td"/part_*.json | jq '{data:.}' > "$outfile" 2>/dev/null
+  if ! jq -s 'add' "$td"/part_*.json 2>/dev/null | jq '{data:.}' > "$outfile" 2>/dev/null; then
+    rm -f "$outfile"
+    return 1
+  fi
   # Verify output has data (jq on empty files exits 0 with no output, so check -s first)
   if [ -s "$outfile" ] && jq -e '.data and (.data|length) > 0' "$outfile" >/dev/null 2>&1; then
     local cnt
-    cnt=$(jq '.data | length' "$outfile" 2>/dev/null)
+    cnt=$(jq '.data | length' "$outfile" 2>/dev/null || echo "?")
     echo " OK (${cnt:-0} items)"
     return 0
   else
@@ -136,13 +165,24 @@ run_export() {
     local td
     td=$(mktemp -d)
     local i=0
+    local total=${#COMPARTMENT_IDS[@]}
+    local hits=0
     for cid in "${COMPARTMENT_IDS[@]}"; do
-      eval "$cmd --compartment-id $cid --all $REGION_FLAG" 2>/dev/null \
-        | jq '.data // []' > "$td/part_$i.json" 2>/dev/null || true
-      # Remove empty arrays to save disk
-      jq -e 'length > 0' "$td/part_$i.json" >/dev/null 2>&1 || rm -f "$td/part_$i.json"
       i=$((i + 1))
+      # Run OCI CLI and capture result; don't let failures stop the loop
+      local tmpout="$td/part_${i}.json"
+      eval "$cmd --compartment-id $cid --all $REGION_FLAG" > "$td/_raw_${i}.json" 2>/dev/null || true
+      # Extract .data array (default to empty array)
+      jq '.data // []' "$td/_raw_${i}.json" > "$tmpout" 2>/dev/null || echo '[]' > "$tmpout"
+      rm -f "$td/_raw_${i}.json"
+      # Remove empty arrays to save disk
+      if jq -e 'length > 0' "$tmpout" >/dev/null 2>&1; then
+        hits=$((hits + 1))
+      else
+        rm -f "$tmpout"
+      fi
     done
+    echo -n " ($hits/$total compartments had data)"
     merge_parts "$td" "$outfile" || echo " EMPTY (skipping)"
     rm -rf "$td"
   fi
@@ -301,8 +341,42 @@ echo "=== Containers ==="
 run_export "oke-clusters" "oci ce cluster list"
 run_export_per_parent "node-pools" "oci ce node-pool list --cluster-id" "oke-clusters" '.id'
 run_export "container-instances" "oci container-instances container-instance list"
-run_export "container-repos" "oci artifacts container-repository list"
-run_export "container-images" "oci artifacts container-image list"
+run_export "container-repos" "oci artifacts container repository list"
+
+# Container images require iterating repos per compartment.
+# The API needs --compartment-id and --repository-id to return images correctly.
+echo -n "  Exporting container-images (per-repo)..."
+_ci_outfile="$OUTPUT_DIR/container-images.json"
+_ci_td=$(mktemp -d)
+_ci_i=0
+_ci_hits=0
+
+if [ -f "$OUTPUT_DIR/container-repos.json" ]; then
+  # Extract (compartment-id, repo-id) pairs from the repos we already exported
+  _ci_pairs=$(jq -r '.data[]? | "\(."compartment-id")|\(.id)"' "$OUTPUT_DIR/container-repos.json" 2>/dev/null || true)
+  if [ -n "$_ci_pairs" ]; then
+    while IFS='|' read -r _ci_cid _ci_rid; do
+      [ -z "$_ci_cid" ] || [ -z "$_ci_rid" ] && continue
+      oci artifacts container image list \
+        --compartment-id "$_ci_cid" \
+        --repository-id "$_ci_rid" \
+        --all $REGION_FLAG 2>/dev/null \
+        | jq '.data // []' > "$_ci_td/part_${_ci_i}.json" 2>/dev/null || true
+      if jq -e 'length > 0' "$_ci_td/part_${_ci_i}.json" >/dev/null 2>&1; then
+        _ci_hits=$((_ci_hits + 1))
+      else
+        rm -f "$_ci_td/part_${_ci_i}.json"
+      fi
+      _ci_i=$((_ci_i + 1))
+    done <<< "$_ci_pairs"
+  fi
+  echo -n " ($_ci_hits repos had images)"
+  merge_parts "$_ci_td" "$_ci_outfile" || echo " EMPTY (skipping)"
+else
+  echo " SKIPPED (no container-repos.json)"
+fi
+rm -rf "$_ci_td"
+
 run_export "image-signatures" "oci artifacts container image-signature list"
 
 # ===================================================================

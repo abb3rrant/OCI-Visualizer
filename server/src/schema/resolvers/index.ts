@@ -5,6 +5,8 @@ import { importResolvers } from './import.js';
 import { topologyResolvers } from './topology.js';
 import { auditResolvers } from './audit.js';
 import { snapshotResolvers } from './snapshot.js';
+import { reachabilityResolvers } from './reachability.js';
+import { diffResolvers } from './diff.js';
 
 /**
  * Deep-merge all resolver maps into a single object.
@@ -38,4 +40,6 @@ export const resolvers = mergeResolvers(
   topologyResolvers,
   auditResolvers,
   snapshotResolvers,
+  reachabilityResolvers,
+  diffResolvers,
 );

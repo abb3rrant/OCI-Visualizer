@@ -9,20 +9,20 @@ const gatewayLabels: Record<string, { short: string; color: string }> = {
   'network/local-peering-gateway': { short: 'LPG', color: '#8B5CF6' },
 };
 
-export default function GatewayNode({ data }: NodeProps) {
+export default React.memo(function GatewayNode({ data }: NodeProps) {
   const d = data as any;
   const gw = gatewayLabels[d?.resourceType] || { short: 'GW', color: '#6B7280' };
 
   return (
-    <div className="bg-white border-2 rounded-lg p-2.5 min-w-[100px] shadow-sm" style={{ borderColor: gw.color }}>
+    <div className="bg-white dark:bg-gray-800 border-2 rounded-lg p-2.5 min-w-[100px] shadow-sm" style={{ borderColor: gw.color }}>
       <div className="flex items-center gap-2">
         <span className="w-6 h-6 rounded-lg text-white text-[9px] flex items-center justify-center font-bold" style={{ backgroundColor: gw.color }}>
           {gw.short}
         </span>
-        <div className="text-xs font-semibold truncate max-w-[100px]">{d?.label || 'Gateway'}</div>
+        <div className="text-xs font-semibold truncate max-w-[100px] dark:text-gray-200">{d?.label || 'Gateway'}</div>
       </div>
       <Handle type="target" position={Position.Top} className="!w-2 !h-2" style={{ background: gw.color }} />
       <Handle type="source" position={Position.Bottom} className="!w-2 !h-2" style={{ background: gw.color }} />
     </div>
   );
-}
+});

@@ -223,8 +223,11 @@ function detectType(items: any[]): string | null {
 
   // --- Compute -----------------------------------------------------------
 
-  // Instances: have "shape" + "image-id" (or "source-details")
-  if (has(sample, 'shape') && (has(sample, 'image-id') || has(sample, 'source-details')) && has(sample, 'fault-domain')) {
+  // Instances: have "shape" + "image-id" (or "source-details") + "fault-domain"
+  // Use `in` instead of `has()` because image-id can be null for boot-volume launches
+  // Negative guards exclude DB systems (database-edition) and container instances (container-count/containers)
+  if (has(sample, 'shape') && ('image-id' in sample || 'source-details' in sample) && 'fault-domain' in sample
+      && !has(sample, 'database-edition') && !has(sample, 'container-count') && !has(sample, 'containers')) {
     return 'compute/instance';
   }
 

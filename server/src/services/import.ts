@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import { parseResources, ParsedResource } from '../parsers/index.js';
-import { extractZip } from '../utils/zipHandler.js';
+import JSZip from 'jszip';
 import { buildRelationships } from './relationship.js';
+import { sanitizeRawData } from '../parsers/helpers.js';
+import { streamJsonItems, toReadable, detectFormat } from '../utils/streamJsonItems.js';
 
 // ---------------------------------------------------------------------------
 // Filename → resource type mapping for ZIP imports
@@ -110,99 +112,195 @@ export interface ImportResult {
   errors: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Shared helper: batch upsert resources in chunks of 500
+// ---------------------------------------------------------------------------
+
+function resourceFields(resource: ParsedResource) {
+  return {
+    resourceType: resource.resourceType,
+    displayName: resource.displayName,
+    compartmentId: resource.compartmentId,
+    lifecycleState: resource.lifecycleState,
+    availabilityDomain: resource.availabilityDomain,
+    regionKey: resource.regionKey,
+    timeCreated: resource.timeCreated,
+    definedTags: resource.definedTags ? JSON.stringify(resource.definedTags) : null,
+    freeformTags: resource.freeformTags ? JSON.stringify(resource.freeformTags) : null,
+    rawData: JSON.stringify(sanitizeRawData(resource.rawData)),
+  };
+}
+
+export type ProgressCallback = (processed: number, total: number) => void;
+
+async function batchUpsertResources(
+  prisma: PrismaClient,
+  snapshotId: string,
+  parsed: ParsedResource[],
+  errors: string[],
+  resourceTypesSet: Set<string>,
+  onProgress?: ProgressCallback,
+): Promise<number> {
+  const BATCH_SIZE = 500;
+  let count = 0;
+
+  for (let i = 0; i < parsed.length; i += BATCH_SIZE) {
+    const chunk = parsed.slice(i, i + BATCH_SIZE);
+    const ops = chunk.map(resource =>
+      prisma.resource.upsert({
+        where: { ocid_snapshotId: { ocid: resource.ocid, snapshotId } },
+        update: { ...resourceFields(resource) },
+        create: { ocid: resource.ocid, snapshotId, ...resourceFields(resource) },
+      }),
+    );
+
+    try {
+      await prisma.$transaction(ops);
+      count += chunk.length;
+      chunk.forEach(r => resourceTypesSet.add(r.resourceType));
+    } catch {
+      // Fallback: try individually for this batch to isolate failures
+      for (const resource of chunk) {
+        try {
+          await prisma.resource.upsert({
+            where: { ocid_snapshotId: { ocid: resource.ocid, snapshotId } },
+            update: { ...resourceFields(resource) },
+            create: { ocid: resource.ocid, snapshotId, ...resourceFields(resource) },
+          });
+          count++;
+          resourceTypesSet.add(resource.resourceType);
+        } catch (err2) {
+          const message = err2 instanceof Error ? err2.message : String(err2);
+          errors.push(`Failed to upsert ${resource.ocid}: ${message}`);
+        }
+      }
+    }
+
+    onProgress?.(count, parsed.length);
+  }
+
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Extract large blobs (user_data, SSH keys) from compute instances and store
+// them separately in ResourceBlob so the main rawData can be safely truncated.
+// ---------------------------------------------------------------------------
+
 /**
- * Import a JSON string containing OCI resources into the database.
+ * Extract large blobs from compute instances and write them to ResourceBlob
+ * in a streaming fashion — processes small chunks at a time to avoid holding
+ * all decoded blob content in memory simultaneously.
+ */
+async function extractAndStoreBlobs(
+  prisma: PrismaClient,
+  snapshotId: string,
+  parsed: ParsedResource[],
+): Promise<void> {
+  const BLOB_KEYS = ['userData', 'sshAuthorizedKeys'] as const;
+  const MIN_LENGTH = 1024;
+  const CHUNK = 200;
+
+  // Only care about compute instances that have metadata
+  const instances = parsed.filter(
+    r => r.resourceType === 'compute/instance' && r.rawData?.metadata && typeof r.rawData.metadata === 'object',
+  );
+  if (instances.length === 0) return;
+
+  // Process in small chunks: extract blobs, look up IDs, upsert, then let GC
+  // reclaim the decoded content before moving to the next chunk.
+  for (let i = 0; i < instances.length; i += CHUNK) {
+    const chunk = instances.slice(i, i + CHUNK);
+
+    // Collect tuples for this chunk only
+    const tuples: { ocid: string; blobKey: string; content: string }[] = [];
+    for (const inst of chunk) {
+      const metadata = inst.rawData.metadata;
+      for (const key of BLOB_KEYS) {
+        const raw = metadata[key];
+        if (typeof raw !== 'string' || raw.length <= MIN_LENGTH) continue;
+
+        let content = raw;
+        if (key === 'userData') {
+          try {
+            content = Buffer.from(raw, 'base64').toString('utf-8');
+          } catch {
+            // Not valid base64 — store as-is
+          }
+        }
+        tuples.push({ ocid: inst.ocid, blobKey: key, content });
+      }
+    }
+
+    if (tuples.length === 0) continue;
+
+    // Look up DB IDs for this chunk's OCIDs
+    const ocids = [...new Set(tuples.map(t => t.ocid))];
+    const resources = await prisma.resource.findMany({
+      where: { snapshotId, ocid: { in: ocids } },
+      select: { id: true, ocid: true },
+    });
+    const ocidToId = new Map(resources.map(r => [r.ocid, r.id]));
+
+    const ops = tuples
+      .filter(t => ocidToId.has(t.ocid))
+      .map(t => {
+        const resourceId = ocidToId.get(t.ocid)!;
+        return prisma.resourceBlob.upsert({
+          where: { resourceId_blobKey: { resourceId, blobKey: t.blobKey } },
+          update: { content: t.content },
+          create: { resourceId, blobKey: t.blobKey, content: t.content },
+        });
+      });
+    if (ops.length > 0) {
+      await prisma.$transaction(ops);
+    }
+    // tuples and decoded content go out of scope here → GC eligible
+  }
+}
+
+/**
+ * Import a JSON string (or Buffer) containing OCI resources into the database.
  *
- * Parses the JSON, upserts each resource into the snapshot, then
- * builds cross-resource relationships.
+ * Uses a streaming JSON parser to avoid loading the entire parsed tree into
+ * memory — items are processed in batches of ITEMS_CHUNK as they are parsed.
  */
 export async function importJsonString(
   prisma: PrismaClient,
   snapshotId: string,
-  jsonString: string,
+  jsonInput: string | Buffer,
   explicitType?: string,
+  skipRelationships = false,
+  onProgress?: ProgressCallback,
 ): Promise<ImportResult> {
   const errors: string[] = [];
   const resourceTypesSet = new Set<string>();
-  let resourceCount = 0;
 
-  let rawJson: unknown;
+  let resourceCount: number;
   try {
-    rawJson = JSON.parse(jsonString);
+    const format = detectFormat(jsonInput);
+    const stream = toReadable(jsonInput);
+    resourceCount = await processStream(
+      prisma, snapshotId, stream, format, explicitType, 'input',
+      errors, resourceTypesSet, onProgress,
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { resourceCount: 0, resourceTypes: [], errors: [`Invalid JSON: ${message}`] };
+    return { resourceCount: 0, resourceTypes: [], errors: [`Import error: ${message}`] };
   }
 
-  let parsed: ParsedResource[];
-  try {
-    parsed = parseResources(rawJson, explicitType);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { resourceCount: 0, resourceTypes: [], errors: [`Parse error: ${message}`] };
-  }
-
-  if (parsed.length === 0) {
-    return { resourceCount: 0, resourceTypes: [], errors: ['No resources found (unrecognised format or empty data)'] };
-  }
-
-  // Filter out resources with empty OCIDs
-  const validParsed = parsed.filter((r) => r.ocid && r.ocid.length > 0);
-  if (validParsed.length < parsed.length) {
-    errors.push(`${parsed.length - validParsed.length} resource(s) had empty OCID and were skipped`);
-  }
-
-  for (const resource of validParsed) {
-    try {
-      await prisma.resource.upsert({
-        where: {
-          ocid_snapshotId: {
-            ocid: resource.ocid,
-            snapshotId,
-          },
-        },
-        update: {
-          resourceType: resource.resourceType,
-          displayName: resource.displayName,
-          compartmentId: resource.compartmentId,
-          lifecycleState: resource.lifecycleState,
-          availabilityDomain: resource.availabilityDomain,
-          regionKey: resource.regionKey,
-          timeCreated: resource.timeCreated,
-          definedTags: resource.definedTags ? JSON.stringify(resource.definedTags) : null,
-          freeformTags: resource.freeformTags ? JSON.stringify(resource.freeformTags) : null,
-          rawData: JSON.stringify(resource.rawData),
-        },
-        create: {
-          ocid: resource.ocid,
-          snapshotId,
-          resourceType: resource.resourceType,
-          displayName: resource.displayName,
-          compartmentId: resource.compartmentId,
-          lifecycleState: resource.lifecycleState,
-          availabilityDomain: resource.availabilityDomain,
-          regionKey: resource.regionKey,
-          timeCreated: resource.timeCreated,
-          definedTags: resource.definedTags ? JSON.stringify(resource.definedTags) : null,
-          freeformTags: resource.freeformTags ? JSON.stringify(resource.freeformTags) : null,
-          rawData: JSON.stringify(resource.rawData),
-        },
-      });
-
-      resourceCount++;
-      resourceTypesSet.add(resource.resourceType);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      errors.push(`Failed to upsert resource ${resource.ocid}: ${message}`);
-    }
+  if (resourceCount === 0 && errors.length === 0) {
+    errors.push('No resources found (unrecognised format or empty data)');
   }
 
   // Build relationships across all resources in the snapshot
-  try {
-    await buildRelationships(prisma, snapshotId);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    errors.push(`Failed to build relationships: ${message}`);
+  if (!skipRelationships) {
+    try {
+      await buildRelationships(prisma, snapshotId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`Failed to build relationships: ${message}`);
+    }
   }
 
   return {
@@ -212,118 +310,132 @@ export async function importJsonString(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Streaming import: reads JSON items one at a time via stream-json, batches
+// them into chunks, and processes each chunk (parse → upsert → blobs).
+// Peak memory is proportional to one batch (~1000 items) not the full file.
+// ---------------------------------------------------------------------------
+
+const ITEMS_CHUNK = 1000;
+
+/**
+ * Stream raw JSON items from a readable stream, batch them, and process
+ * each batch through parseResources → batchUpsertResources → extractAndStoreBlobs.
+ */
+async function processStream(
+  prisma: PrismaClient,
+  snapshotId: string,
+  readable: NodeJS.ReadableStream,
+  format: 'array' | 'object',
+  explicitType: string | undefined,
+  entryName: string,
+  errors: string[],
+  resourceTypesSet: Set<string>,
+  onProgress?: ProgressCallback,
+): Promise<number> {
+  let totalCount = 0;
+  let skippedOcids = 0;
+  let batch: any[] = [];
+
+  const processBatch = async () => {
+    if (batch.length === 0) return;
+    const rawChunk = batch;
+    batch = []; // release reference before async work
+
+    let parsed: ParsedResource[];
+    try {
+      parsed = parseResources(rawChunk, explicitType);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`Parse error in ${entryName}: ${message}`);
+      return;
+    }
+
+    const valid = parsed.filter(r => r.ocid && r.ocid.length > 0);
+    skippedOcids += parsed.length - valid.length;
+    if (valid.length === 0) return;
+
+    const count = await batchUpsertResources(prisma, snapshotId, valid, errors, resourceTypesSet);
+    totalCount += count;
+
+    try {
+      await extractAndStoreBlobs(prisma, snapshotId, valid);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`Failed to extract blobs from ${entryName}: ${message}`);
+    }
+
+    onProgress?.(totalCount, 0);
+    // valid, parsed, rawChunk all go out of scope → GC eligible
+  };
+
+  for await (const item of streamJsonItems(readable, format)) {
+    batch.push(item);
+    if (batch.length >= ITEMS_CHUNK) {
+      await processBatch();
+    }
+  }
+  // Flush remaining items
+  await processBatch();
+
+  if (skippedOcids > 0) {
+    errors.push(`Warning: ${entryName} had ${skippedOcids} resource(s) with empty OCID (skipped)`);
+  }
+
+  return totalCount;
+}
+
 /**
  * Import a ZIP buffer containing one or more .json files.
  *
- * Each JSON file inside the archive is processed independently and
- * the results are aggregated. Relationship building is deferred until
- * all files have been imported.
+ * Uses JSZip + streaming JSON parser to avoid loading the entire decompressed
+ * file or parsed JSON tree into memory. Each file is streamed directly from
+ * the zip, parsed item-by-item, and processed in batches of ITEMS_CHUNK.
  */
 export async function importZipBuffer(
   prisma: PrismaClient,
   snapshotId: string,
   buffer: Buffer,
+  onProgress?: ProgressCallback,
 ): Promise<ImportResult> {
   const errors: string[] = [];
   const resourceTypesSet = new Set<string>();
   let totalResourceCount = 0;
 
-  let entries: Array<{ name: string; content: string }>;
+  let zip: JSZip;
   try {
-    entries = await extractZip(buffer);
+    zip = await JSZip.loadAsync(buffer);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { resourceCount: 0, resourceTypes: [], errors: [`Failed to extract ZIP: ${message}`] };
   }
 
-  const jsonEntries = entries.filter((e) => e.name.toLowerCase().endsWith('.json'));
+  // Collect JSON entry names (metadata only — no content loaded yet)
+  const jsonEntryNames = Object.keys(zip.files).filter(
+    name => !zip.files[name].dir && name.toLowerCase().endsWith('.json'),
+  );
 
-  if (jsonEntries.length === 0) {
+  if (jsonEntryNames.length === 0) {
     return { resourceCount: 0, resourceTypes: [], errors: ['No .json files found in ZIP archive'] };
   }
 
-  // Process each JSON file. We defer relationship-building to the end so we
-  // import all resources first, then resolve references in one pass.
-  for (const entry of jsonEntries) {
-    let rawJson: unknown;
-    try {
-      rawJson = JSON.parse(entry.content);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      errors.push(`Invalid JSON in ${entry.name}: ${message}`);
-      continue;
-    }
-
-    // Derive explicit type from the ZIP entry filename so we don't rely
-    // solely on auto-detection (which can misfire for ambiguous schemas).
-    const baseName = baseNameFromEntry(entry.name);
+  // Process one file at a time using streaming JSON parser.
+  // nodeStream decompresses on-the-fly; stream-json parses item-by-item.
+  for (const entryName of jsonEntryNames) {
+    const baseName = baseNameFromEntry(entryName);
     const explicitType = FILENAME_TO_TYPE[baseName];
 
-    let parsed: ParsedResource[];
     try {
-      parsed = parseResources(rawJson, explicitType);
+      const nodeStream = zip.files[entryName].nodeStream('nodebuffer');
+      // OCI CLI exports always produce {"data": [...]} format
+      const count = await processStream(
+        prisma, snapshotId, nodeStream, 'object', explicitType, entryName,
+        errors, resourceTypesSet, onProgress,
+      );
+      totalResourceCount += count;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      errors.push(`Parse error in ${entry.name}: ${message}`);
-      continue;
-    }
-
-    if (parsed.length === 0) {
-      errors.push(`Warning: ${entry.name} produced 0 resources (unrecognised format or empty data)`);
-      continue;
-    }
-
-    // Filter out resources with empty OCIDs — they'd collide on the unique constraint
-    const valid = parsed.filter((r) => r.ocid && r.ocid.length > 0);
-    if (valid.length < parsed.length) {
-      errors.push(
-        `Warning: ${entry.name} had ${parsed.length - valid.length} resource(s) with empty OCID (skipped)`,
-      );
-    }
-
-    for (const resource of valid) {
-      try {
-        await prisma.resource.upsert({
-          where: {
-            ocid_snapshotId: {
-              ocid: resource.ocid,
-              snapshotId,
-            },
-          },
-          update: {
-            resourceType: resource.resourceType,
-            displayName: resource.displayName,
-            compartmentId: resource.compartmentId,
-            lifecycleState: resource.lifecycleState,
-            availabilityDomain: resource.availabilityDomain,
-            regionKey: resource.regionKey,
-            timeCreated: resource.timeCreated,
-            definedTags: resource.definedTags ? JSON.stringify(resource.definedTags) : null,
-            freeformTags: resource.freeformTags ? JSON.stringify(resource.freeformTags) : null,
-            rawData: JSON.stringify(resource.rawData),
-          },
-          create: {
-            ocid: resource.ocid,
-            snapshotId,
-            resourceType: resource.resourceType,
-            displayName: resource.displayName,
-            compartmentId: resource.compartmentId,
-            lifecycleState: resource.lifecycleState,
-            availabilityDomain: resource.availabilityDomain,
-            regionKey: resource.regionKey,
-            timeCreated: resource.timeCreated,
-            definedTags: resource.definedTags ? JSON.stringify(resource.definedTags) : null,
-            freeformTags: resource.freeformTags ? JSON.stringify(resource.freeformTags) : null,
-            rawData: JSON.stringify(resource.rawData),
-          },
-        });
-
-        totalResourceCount++;
-        resourceTypesSet.add(resource.resourceType);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        errors.push(`Failed to upsert resource ${resource.ocid} from ${entry.name}: ${message}`);
-      }
+      errors.push(`Failed to process ${entryName}: ${message}`);
     }
   }
 

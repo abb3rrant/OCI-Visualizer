@@ -148,6 +148,25 @@ export const resourceResolvers = {
         }));
     },
 
+    searchResources: async (
+      _parent: unknown,
+      args: { snapshotId: string; query: string; limit?: number },
+      ctx: Context,
+    ) => {
+      const limit = Math.min(args.limit ?? 20, 50);
+      return ctx.prisma.resource.findMany({
+        where: {
+          snapshotId: args.snapshotId,
+          OR: [
+            { displayName: { contains: args.query } },
+            { ocid: { contains: args.query } },
+          ],
+        },
+        take: limit,
+        orderBy: { displayName: 'asc' },
+      });
+    },
+
     exportScript: () => generateExportScript(),
 
     resourceCounts: async (
@@ -183,6 +202,12 @@ export const resourceResolvers = {
     relationsTo: (parent: any, _args: unknown, ctx: Context) => {
       return ctx.prisma.resourceRelation.findMany({
         where: { toResourceId: parent.id },
+      });
+    },
+
+    blobs: (parent: any, _args: unknown, ctx: Context) => {
+      return ctx.prisma.resourceBlob.findMany({
+        where: { resourceId: parent.id },
       });
     },
   },

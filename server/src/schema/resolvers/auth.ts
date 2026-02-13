@@ -23,6 +23,10 @@ export const authResolvers = {
       ctx: Context,
     ) => {
       try {
+        if (args.password.length < 8) {
+          throw new GraphQLError('Password must be at least 8 characters long.');
+        }
+
         const existing = await ctx.prisma.user.findUnique({
           where: { email: args.email },
         });

@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
-import type { Resource } from '../../types';
+import { useQuery } from 'urql';
+import type { Resource, GroupedAuditFinding } from '../../types';
 import { formatOcid, formatDate, formatResourceType } from '../../utils/formatters';
+import { getSeverityColor } from '../../utils/colors';
+import { useSnapshot } from '../../contexts/SnapshotContext';
+import { RESOURCE_FINDINGS_QUERY } from '../../graphql/queries';
 import StateBadge from '../common/StateBadge';
 import ResourceIcon from '../common/ResourceIcon';
 
@@ -458,6 +462,16 @@ const RELATION_LABELS: Record<string, [string, string]> = {
 
 export default function DetailPanel({ resource, onClose, onNavigate }: DetailPanelProps) {
   const [showRawJson, setShowRawJson] = useState(false);
+  const [showFindings, setShowFindings] = useState(false);
+  const { currentSnapshot } = useSnapshot();
+
+  const [findingsResult] = useQuery({
+    query: RESOURCE_FINDINGS_QUERY,
+    variables: { snapshotId: currentSnapshot?.id || '', resourceId: resource.id },
+    pause: !currentSnapshot?.id,
+  });
+
+  const findings: GroupedAuditFinding[] = findingsResult.data?.resourceFindings || [];
 
   const rawData = resource.rawData || {};
   const fields = RESOURCE_FIELDS[resource.resourceType] || autoExtractFields(rawData);
@@ -492,15 +506,15 @@ export default function DetailPanel({ resource, onClose, onNavigate }: DetailPan
   }
 
   return (
-    <div className="w-96 bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-hidden shadow-lg">
+    <div className="w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col shrink-0 overflow-hidden shadow-lg">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
         <ResourceIcon resourceType={resource.resourceType} />
         <div className="flex-1 min-w-0">
-          <h2 className="font-semibold text-gray-900 truncate">{resource.displayName || 'Unnamed'}</h2>
-          <p className="text-xs text-gray-500">{formatResourceType(resource.resourceType)}</p>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{resource.displayName || 'Unnamed'}</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{formatResourceType(resource.resourceType)}</p>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-gray-200 shrink-0">
+        <button onClick={onClose} className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -514,28 +528,28 @@ export default function DetailPanel({ resource, onClose, onNavigate }: DetailPan
           <div className="flex items-center gap-2 mb-3">
             <StateBadge state={resource.lifecycleState} />
             {resource.availabilityDomain && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{resource.availabilityDomain}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{resource.availabilityDomain}</span>
             )}
             {resource.regionKey && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{resource.regionKey}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{resource.regionKey}</span>
             )}
           </div>
 
           <dl className="space-y-2 text-sm">
             <div>
-              <dt className="text-xs text-gray-400 uppercase font-medium">OCID</dt>
-              <dd className="font-mono text-xs break-all text-gray-600 mt-0.5">{resource.ocid}</dd>
+              <dt className="text-xs text-gray-400 dark:text-gray-500 uppercase font-medium">OCID</dt>
+              <dd className="font-mono text-xs break-all text-gray-600 dark:text-gray-300 mt-0.5">{resource.ocid}</dd>
             </div>
             {resource.compartmentId && (
               <div>
-                <dt className="text-xs text-gray-400 uppercase font-medium">Compartment</dt>
-                <dd className="font-mono text-xs break-all text-gray-600 mt-0.5">{formatOcid(resource.compartmentId)}</dd>
+                <dt className="text-xs text-gray-400 dark:text-gray-500 uppercase font-medium">Compartment</dt>
+                <dd className="font-mono text-xs break-all text-gray-600 dark:text-gray-300 mt-0.5">{formatOcid(resource.compartmentId)}</dd>
               </div>
             )}
             {resource.timeCreated && (
               <div>
-                <dt className="text-xs text-gray-400 uppercase font-medium">Created</dt>
-                <dd className="text-gray-600 mt-0.5">{formatDate(resource.timeCreated)}</dd>
+                <dt className="text-xs text-gray-400 dark:text-gray-500 uppercase font-medium">Created</dt>
+                <dd className="text-gray-600 dark:text-gray-300 mt-0.5">{formatDate(resource.timeCreated)}</dd>
               </div>
             )}
           </dl>
@@ -544,15 +558,15 @@ export default function DetailPanel({ resource, onClose, onNavigate }: DetailPan
         {/* Resource-type-specific details */}
         {fields.length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Details</h3>
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-100 dark:border-gray-700 pb-1">Details</h3>
             <dl className="space-y-2 text-sm">
               {fields.map((field) => {
                 const value = rawData[field.key];
                 if (value === null || value === undefined) return null;
                 return (
                   <div key={field.key}>
-                    <dt className="text-xs text-gray-400 font-medium">{field.label}</dt>
-                    <dd className="text-gray-700 mt-0.5">{formatFieldValue(value, field.format)}</dd>
+                    <dt className="text-xs text-gray-400 dark:text-gray-500 font-medium">{field.label}</dt>
+                    <dd className="text-gray-700 dark:text-gray-200 mt-0.5">{formatFieldValue(value, field.format)}</dd>
                   </div>
                 );
               })}
@@ -563,7 +577,7 @@ export default function DetailPanel({ resource, onClose, onNavigate }: DetailPan
         {/* Freeform Tags */}
         {resource.freeformTags && Object.keys(resource.freeformTags).length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Tags</h3>
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-100 dark:border-gray-700 pb-1">Tags</h3>
             <div className="flex flex-wrap gap-1">
               {Object.entries(resource.freeformTags).map(([k, v]) => (
                 <span key={k} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-100">
@@ -578,24 +592,79 @@ export default function DetailPanel({ resource, onClose, onNavigate }: DetailPan
         {/* Relationships */}
         {relations.length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-100 dark:border-gray-700 pb-1">
               Relationships ({relations.length})
             </h3>
             <div className="space-y-1.5">
               {relations.map((rel) => (
                 <div
                   key={rel.id}
-                  className={`flex items-start gap-2 text-xs p-1.5 rounded ${onNavigate ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                  className={`flex items-start gap-2 text-xs p-1.5 rounded ${onNavigate ? 'hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer' : ''}`}
                   onClick={() => onNavigate?.(rel.targetId)}
                 >
-                  <span className="text-gray-400 shrink-0 mt-0.5 w-24 text-right">{rel.label}</span>
+                  <span className="text-gray-400 dark:text-gray-500 shrink-0 mt-0.5 w-24 text-right">{rel.label}</span>
                   <div className="min-w-0">
-                    <div className="text-gray-800 font-medium truncate">{rel.targetName}</div>
-                    {rel.targetType && <div className="text-gray-400">{formatResourceType(rel.targetType)}</div>}
+                    <div className="text-gray-800 dark:text-gray-200 font-medium truncate">{rel.targetName}</div>
+                    {rel.targetType && <div className="text-gray-400 dark:text-gray-500">{formatResourceType(rel.targetType)}</div>}
                   </div>
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {/* Security Findings */}
+        {findings.length > 0 && (
+          <section>
+            <button
+              onClick={() => setShowFindings(!showFindings)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-100 dark:border-gray-700 pb-1"
+            >
+              <span>Security Findings ({findings.length})</span>
+              <div className="flex gap-1">
+                {(() => {
+                  const counts: Record<string, number> = {};
+                  for (const f of findings) {
+                    counts[f.severity] = (counts[f.severity] || 0) + 1;
+                  }
+                  return (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const)
+                    .filter(s => counts[s])
+                    .map(s => {
+                      const c = getSeverityColor(s);
+                      return (
+                        <span key={s} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: `${c}15`, color: c }}>
+                          {counts[s]}
+                        </span>
+                      );
+                    });
+                })()}
+              </div>
+              <svg
+                className={`w-3 h-3 text-gray-400 transition-transform ${showFindings ? 'rotate-90' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            {showFindings && (
+              <div className="space-y-2">
+                {findings.map((f, i) => {
+                  const color = getSeverityColor(f.severity);
+                  return (
+                    <div key={i} className="p-2 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: `${color}15`, color }}>{f.severity}</span>
+                        {f.framework && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: '#7C3AED15', color: '#7C3AED' }}>{f.framework}</span>
+                        )}
+                      </div>
+                      <div className="text-xs font-medium text-gray-900 dark:text-gray-100">{f.title}</div>
+                      <div className="text-xs text-blue-700 mt-1">{f.recommendation}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -608,7 +677,7 @@ export default function DetailPanel({ resource, onClose, onNavigate }: DetailPan
             {showRawJson ? 'Hide' : 'Show'} Raw JSON
           </button>
           {showRawJson && (
-            <pre className="mt-2 p-3 bg-gray-50 rounded-lg text-xs overflow-auto max-h-96 border border-gray-200">
+            <pre className="mt-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs overflow-auto max-h-96 border border-gray-200 dark:border-gray-700 dark:text-gray-300">
               {JSON.stringify(resource.rawData, null, 2)}
             </pre>
           )}

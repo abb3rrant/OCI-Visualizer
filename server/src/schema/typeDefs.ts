@@ -9,6 +9,7 @@ export const typeDefs = /* GraphQL */ `
     NETWORK
     COMPARTMENT
     DEPENDENCY
+    EXPOSURE
   }
 
   enum Severity {
@@ -82,6 +83,13 @@ export const typeDefs = /* GraphQL */ `
     snapshotId: String!
     relationsFrom: [ResourceRelation!]!
     relationsTo: [ResourceRelation!]!
+    blobs: [ResourceBlob!]!
+  }
+
+  type ResourceBlob {
+    id: ID!
+    blobKey: String!
+    content: String!
   }
 
   type ResourceRelation {
@@ -121,6 +129,8 @@ export const typeDefs = /* GraphQL */ `
   type Topology {
     nodes: [TopologyNode!]!
     edges: [TopologyEdge!]!
+    totalCount: Int!
+    truncated: Boolean!
   }
 
   type TopologyNode {
@@ -144,11 +154,41 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ------------------------------------------------------------------
+  # Reachability analysis
+  # ------------------------------------------------------------------
+
+  type ReachabilityHop {
+    id: ID!
+    type: String!
+    label: String!
+    resourceType: String!
+    ocid: String!
+    status: String!
+    details: String!
+    metadata: JSON
+  }
+
+  type ReachabilityLink {
+    id: ID!
+    source: String!
+    target: String!
+    status: String!
+    label: String!
+  }
+
+  type ReachabilityResult {
+    hops: [ReachabilityHop!]!
+    links: [ReachabilityLink!]!
+    verdict: String!
+    verdictDetail: String!
+  }
+
+  # ------------------------------------------------------------------
   # Audit
   # ------------------------------------------------------------------
 
   type AuditReport {
-    findings: [AuditFinding!]!
+    groupedFindings: [GroupedAuditFinding!]!
     summary: AuditSummary!
   }
 
@@ -160,15 +200,21 @@ export const typeDefs = /* GraphQL */ `
     info: Int!
   }
 
-  type AuditFinding {
+  type AffectedResource {
+    id: String!
+    ocid: String!
+    name: String
+  }
+
+  type GroupedAuditFinding {
     severity: Severity!
     category: String!
     title: String!
     description: String!
-    resourceId: String
-    resourceOcid: String
-    resourceName: String
     recommendation: String!
+    count: Int!
+    resources: [AffectedResource!]!
+    framework: String
   }
 
   # ------------------------------------------------------------------
@@ -188,6 +234,50 @@ export const typeDefs = /* GraphQL */ `
     count: Int!
     total: Int!
     percentage: Float!
+  }
+
+  # ------------------------------------------------------------------
+  # Snapshot Diff
+  # ------------------------------------------------------------------
+
+  type DiffResource {
+    ocid: String!
+    displayName: String
+    resourceType: String!
+  }
+
+  type ChangedField {
+    field: String!
+    oldValue: JSON
+    newValue: JSON
+  }
+
+  type ChangedResource {
+    ocid: String!
+    displayName: String
+    resourceType: String!
+    changes: [ChangedField!]!
+  }
+
+  type SnapshotDiff {
+    added: [DiffResource!]!
+    removed: [DiffResource!]!
+    changed: [ChangedResource!]!
+  }
+
+  # ------------------------------------------------------------------
+  # Audit Trend
+  # ------------------------------------------------------------------
+
+  type AuditTrendPoint {
+    snapshotId: String!
+    snapshotName: String!
+    date: String!
+    critical: Int!
+    high: Int!
+    medium: Int!
+    low: Int!
+    info: Int!
   }
 
   # ------------------------------------------------------------------
@@ -224,7 +314,15 @@ export const typeDefs = /* GraphQL */ `
     topology(snapshotId: String!, compartmentId: String, viewType: ViewType!): Topology!
 
     auditFindings(snapshotId: String!): AuditReport!
+    resourceFindings(snapshotId: String!, resourceId: String!): [GroupedAuditFinding!]!
     tagCompliance(snapshotId: String!, requiredTags: [String!]!): TagReport!
+
+    reachabilityAnalysis(snapshotId: String!, sourceIp: String, destinationIp: String, protocol: String, port: Int): ReachabilityResult!
+
+    searchResources(snapshotId: String!, query: String!, limit: Int): [Resource!]!
+
+    snapshotDiff(snapshotIdA: String!, snapshotIdB: String!): SnapshotDiff!
+    auditTrend: [AuditTrendPoint!]!
 
     exportScript: String!
   }

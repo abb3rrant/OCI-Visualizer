@@ -44,7 +44,7 @@ export const DELETE_SNAPSHOT_MUTATION = gql`
 `;
 
 export const IMPORT_JSON_MUTATION = gql`
-  mutation ImportJson($snapshotId: ID!, $resourceType: String, $jsonData: String!) {
+  mutation ImportJson($snapshotId: String!, $resourceType: String, $jsonData: String!) {
     importJson(snapshotId: $snapshotId, resourceType: $resourceType, jsonData: $jsonData) {
       resourceCount
       resourceTypes

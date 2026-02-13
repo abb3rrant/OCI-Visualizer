@@ -8,50 +8,18 @@ interface ResourceRecord {
   rawData: string | null;
 }
 
-/**
- * Attempt to create (upsert) a single relationship.
- * Silently skips if either side of the relationship is missing.
- */
-async function tryCreateRelation(
-  prisma: PrismaClient,
-  fromResourceId: string,
-  toResourceId: string,
-  relationType: string,
-  metadata?: Record<string, any>,
-): Promise<boolean> {
-  if (!fromResourceId || !toResourceId) return false;
-
-  try {
-    await prisma.resourceRelation.upsert({
-      where: {
-        fromResourceId_toResourceId_relationType: {
-          fromResourceId,
-          toResourceId,
-          relationType,
-        },
-      },
-      update: {
-        metadata: metadata ? JSON.stringify(metadata) : null,
-      },
-      create: {
-        fromResourceId,
-        toResourceId,
-        relationType,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-      },
-    });
-    return true;
-  } catch {
-    // Skip gracefully — the referenced resource may not exist in this snapshot
-    return false;
-  }
+interface RelationTuple {
+  fromResourceId: string;
+  toResourceId: string;
+  relationType: string;
+  metadata: string | null;
 }
 
 /**
  * Build all discoverable relationships between resources in a snapshot.
  *
- * This function inspects rawData on each resource and creates typed edges
- * (ResourceRelation rows) based on OCI reference fields.
+ * This function inspects rawData on each resource and collects typed edges,
+ * then batch-upserts them using prisma.$transaction() for performance.
  *
  * Returns the total number of relationships created.
  */
@@ -59,27 +27,55 @@ export async function buildRelationships(
   prisma: PrismaClient,
   snapshotId: string,
 ): Promise<number> {
-  // Load all resources for this snapshot
-  const resources = (await prisma.resource.findMany({
+  // Step 1: Load lightweight metadata (no rawData) for all resources
+  // to build the OCID→ID lookup map.  Fetching rawData for 100k+ resources
+  // in one query can exceed Prisma's napi string limit.
+  const lightResources = await prisma.resource.findMany({
     where: { snapshotId },
     select: {
       id: true,
       ocid: true,
       resourceType: true,
       compartmentId: true,
-      rawData: true,
     },
-  })) as ResourceRecord[];
+  });
 
   // Build a lookup map: OCID → resource DB id
   const ocidToId = new Map<string, string>();
-  for (const r of resources) {
+  for (const r of lightResources) {
     ocidToId.set(r.ocid, r.id);
   }
 
-  let created = 0;
+  // Collect all relationship tuples first, then batch-upsert
+  const tuples: RelationTuple[] = [];
 
-  for (const resource of resources) {
+  function addRelation(from: string, to: string, type: string, meta?: Record<string, any>) {
+    if (!from || !to) return;
+    tuples.push({
+      fromResourceId: from,
+      toResourceId: to,
+      relationType: type,
+      metadata: meta ? JSON.stringify(meta) : null,
+    });
+  }
+
+  // Step 2: Process resources in chunks to avoid loading all rawData at once.
+  // We need rawData to discover references, but only for the current chunk.
+  const CHUNK_SIZE = 5000;
+  for (let offset = 0; offset < lightResources.length; offset += CHUNK_SIZE) {
+    const chunkIds = lightResources.slice(offset, offset + CHUNK_SIZE).map(r => r.id);
+    const chunkResources = (await prisma.resource.findMany({
+      where: { id: { in: chunkIds } },
+      select: {
+        id: true,
+        ocid: true,
+        resourceType: true,
+        compartmentId: true,
+        rawData: true,
+      },
+    })) as ResourceRecord[];
+
+  for (const resource of chunkResources) {
     let rawData: Record<string, any> = {};
     if (resource.rawData) {
       try {
@@ -98,9 +94,7 @@ export async function buildRelationships(
     if (resource.compartmentId) {
       const compartmentDbId = ocidToId.get(resource.compartmentId);
       if (compartmentDbId && compartmentDbId !== resId) {
-        if (await tryCreateRelation(prisma, compartmentDbId, resId, 'contains')) {
-          created++;
-        }
+        addRelation(compartmentDbId, resId, 'contains');
       }
     }
 
@@ -110,9 +104,7 @@ export async function buildRelationships(
     if (resType === 'iam/compartment' && resource.compartmentId) {
       const parentDbId = ocidToId.get(resource.compartmentId);
       if (parentDbId && parentDbId !== resId) {
-        if (await tryCreateRelation(prisma, parentDbId, resId, 'parent')) {
-          created++;
-        }
+        addRelation(parentDbId, resId, 'parent');
       }
     }
 
@@ -122,9 +114,7 @@ export async function buildRelationships(
     if (resType === 'network/subnet' && rawData.vcnId) {
       const vcnDbId = ocidToId.get(rawData.vcnId);
       if (vcnDbId) {
-        if (await tryCreateRelation(prisma, vcnDbId, resId, 'contains')) {
-          created++;
-        }
+        addRelation(vcnDbId, resId, 'contains');
       }
     }
 
@@ -134,18 +124,14 @@ export async function buildRelationships(
     if (rawData.subnetId) {
       const subnetDbId = ocidToId.get(rawData.subnetId);
       if (subnetDbId) {
-        if (await tryCreateRelation(prisma, resId, subnetDbId, 'subnet-member')) {
-          created++;
-        }
+        addRelation(resId, subnetDbId, 'subnet-member');
       }
     }
     if (Array.isArray(rawData.subnetIds)) {
       for (const sid of rawData.subnetIds) {
         const subnetDbId = ocidToId.get(sid);
         if (subnetDbId) {
-          if (await tryCreateRelation(prisma, resId, subnetDbId, 'subnet-member')) {
-            created++;
-          }
+          addRelation(resId, subnetDbId, 'subnet-member');
         }
       }
     }
@@ -156,9 +142,7 @@ export async function buildRelationships(
     if (resType === 'network/subnet' && rawData.routeTableId) {
       const rtDbId = ocidToId.get(rawData.routeTableId);
       if (rtDbId) {
-        if (await tryCreateRelation(prisma, resId, rtDbId, 'routes-via')) {
-          created++;
-        }
+        addRelation(resId, rtDbId, 'routes-via');
       }
     }
 
@@ -169,9 +153,7 @@ export async function buildRelationships(
       for (const slId of rawData.securityListIds) {
         const slDbId = ocidToId.get(slId);
         if (slDbId) {
-          if (await tryCreateRelation(prisma, resId, slDbId, 'secured-by')) {
-            created++;
-          }
+          addRelation(resId, slDbId, 'secured-by');
         }
       }
     }
@@ -184,9 +166,7 @@ export async function buildRelationships(
       for (const nsgId of nsgIdList) {
         const nsgDbId = ocidToId.get(nsgId);
         if (nsgDbId) {
-          if (await tryCreateRelation(prisma, resId, nsgDbId, 'nsg-member')) {
-            created++;
-          }
+          addRelation(resId, nsgDbId, 'nsg-member');
         }
       }
     }
@@ -203,9 +183,7 @@ export async function buildRelationships(
       const volumeDbId = volumeOcid ? ocidToId.get(volumeOcid) : undefined;
 
       if (instanceDbId && volumeDbId) {
-        if (await tryCreateRelation(prisma, instanceDbId, volumeDbId, 'volume-attached')) {
-          created++;
-        }
+        addRelation(instanceDbId, volumeDbId, 'volume-attached');
       }
     }
 
@@ -222,19 +200,11 @@ export async function buildRelationships(
         const bs = backendSets[bsName];
         if (Array.isArray(bs.backends)) {
           for (const backend of bs.backends) {
-            // Backends may reference an instance via the ipAddress or name field
-            // but more reliably via an OCID if present
             const targetOcid = backend.instanceId || backend.targetId;
             if (targetOcid) {
               const targetDbId = ocidToId.get(targetOcid);
               if (targetDbId) {
-                if (
-                  await tryCreateRelation(prisma, resId, targetDbId, 'lb-backend', {
-                    backendSet: bsName,
-                  })
-                ) {
-                  created++;
-                }
+                addRelation(resId, targetDbId, 'lb-backend', { backendSet: bsName });
               }
             }
           }
@@ -255,9 +225,7 @@ export async function buildRelationships(
     if (gatewayTypes.includes(resType) && rawData.vcnId) {
       const vcnDbId = ocidToId.get(rawData.vcnId);
       if (vcnDbId) {
-        if (await tryCreateRelation(prisma, resId, vcnDbId, 'gateway-for')) {
-          created++;
-        }
+        addRelation(resId, vcnDbId, 'gateway-for');
       }
     }
 
@@ -267,9 +235,7 @@ export async function buildRelationships(
     if (resType === 'serverless/function' && rawData.applicationId) {
       const appDbId = ocidToId.get(rawData.applicationId);
       if (appDbId) {
-        if (await tryCreateRelation(prisma, resId, appDbId, 'runs-in')) {
-          created++;
-        }
+        addRelation(resId, appDbId, 'runs-in');
       }
     }
 
@@ -279,9 +245,7 @@ export async function buildRelationships(
     if (resType === 'container/cluster' && rawData.vcnId) {
       const vcnDbId = ocidToId.get(rawData.vcnId);
       if (vcnDbId) {
-        if (await tryCreateRelation(prisma, resId, vcnDbId, 'uses-vcn')) {
-          created++;
-        }
+        addRelation(resId, vcnDbId, 'uses-vcn');
       }
     }
 
@@ -291,9 +255,7 @@ export async function buildRelationships(
     if (resType === 'compute/instance' && rawData.imageId) {
       const imageDbId = ocidToId.get(rawData.imageId);
       if (imageDbId) {
-        if (await tryCreateRelation(prisma, resId, imageDbId, 'uses-image')) {
-          created++;
-        }
+        addRelation(resId, imageDbId, 'uses-image');
       }
     }
 
@@ -303,9 +265,7 @@ export async function buildRelationships(
     if (resType === 'container/node-pool' && rawData.clusterId) {
       const clusterDbId = ocidToId.get(rawData.clusterId);
       if (clusterDbId) {
-        if (await tryCreateRelation(prisma, resId, clusterDbId, 'member-of')) {
-          created++;
-        }
+        addRelation(resId, clusterDbId, 'member-of');
       }
     }
 
@@ -315,9 +275,7 @@ export async function buildRelationships(
     if (resType === 'container/container-image' && rawData.repositoryId) {
       const repoDbId = ocidToId.get(rawData.repositoryId);
       if (repoDbId) {
-        if (await tryCreateRelation(prisma, resId, repoDbId, 'stored-in')) {
-          created++;
-        }
+        addRelation(resId, repoDbId, 'stored-in');
       }
     }
 
@@ -327,9 +285,7 @@ export async function buildRelationships(
     if (resType === 'serverless/api-deployment' && rawData.gatewayId) {
       const gwDbId = ocidToId.get(rawData.gatewayId);
       if (gwDbId) {
-        if (await tryCreateRelation(prisma, resId, gwDbId, 'deployed-to')) {
-          created++;
-        }
+        addRelation(resId, gwDbId, 'deployed-to');
       }
     }
 
@@ -339,9 +295,7 @@ export async function buildRelationships(
     if (resType === 'database/db-home' && rawData.dbSystemId) {
       const dbSysDbId = ocidToId.get(rawData.dbSystemId);
       if (dbSysDbId) {
-        if (await tryCreateRelation(prisma, resId, dbSysDbId, 'member-of')) {
-          created++;
-        }
+        addRelation(resId, dbSysDbId, 'member-of');
       }
     }
 
@@ -351,9 +305,7 @@ export async function buildRelationships(
     if (resType === 'storage/volume-backup' && rawData.volumeId) {
       const volDbId = ocidToId.get(rawData.volumeId);
       if (volDbId) {
-        if (await tryCreateRelation(prisma, resId, volDbId, 'backup-of')) {
-          created++;
-        }
+        addRelation(resId, volDbId, 'backup-of');
       }
     }
 
@@ -364,9 +316,7 @@ export async function buildRelationships(
       for (const vid of rawData.volumeIds) {
         const volDbId = ocidToId.get(vid);
         if (volDbId) {
-          if (await tryCreateRelation(prisma, resId, volDbId, 'groups')) {
-            created++;
-          }
+          addRelation(resId, volDbId, 'groups');
         }
       }
     }
@@ -379,9 +329,7 @@ export async function buildRelationships(
         if (vnic?.subnetId) {
           const subnetDbId = ocidToId.get(vnic.subnetId);
           if (subnetDbId) {
-            if (await tryCreateRelation(prisma, resId, subnetDbId, 'subnet-member')) {
-              created++;
-            }
+            addRelation(resId, subnetDbId, 'subnet-member');
           }
         }
       }
@@ -397,9 +345,7 @@ export async function buildRelationships(
           if (pc?.subnetId) {
             const subnetDbId = ocidToId.get(pc.subnetId);
             if (subnetDbId) {
-              if (await tryCreateRelation(prisma, resId, subnetDbId, 'subnet-member')) {
-                created++;
-              }
+              addRelation(resId, subnetDbId, 'subnet-member');
             }
           }
         }
@@ -412,9 +358,7 @@ export async function buildRelationships(
     if (resType === 'network/drg-attachment' && rawData.drgId) {
       const drgDbId = ocidToId.get(rawData.drgId);
       if (drgDbId) {
-        if (await tryCreateRelation(prisma, resId, drgDbId, 'attached-to')) {
-          created++;
-        }
+        addRelation(resId, drgDbId, 'attached-to');
       }
     }
 
@@ -424,9 +368,7 @@ export async function buildRelationships(
     if (resType === 'network/drg-attachment' && rawData.vcnId) {
       const vcnDbId = ocidToId.get(rawData.vcnId);
       if (vcnDbId) {
-        if (await tryCreateRelation(prisma, resId, vcnDbId, 'gateway-for')) {
-          created++;
-        }
+        addRelation(resId, vcnDbId, 'gateway-for');
       }
     }
 
@@ -447,13 +389,7 @@ export async function buildRelationships(
             if (targetOcid) {
               const targetDbId = ocidToId.get(targetOcid);
               if (targetDbId) {
-                if (
-                  await tryCreateRelation(prisma, resId, targetDbId, 'lb-backend', {
-                    backendSet: bsName,
-                  })
-                ) {
-                  created++;
-                }
+                addRelation(resId, targetDbId, 'lb-backend', { backendSet: bsName });
               }
             }
           }
@@ -467,9 +403,7 @@ export async function buildRelationships(
     if (resType === 'security/secret' && rawData.vaultId) {
       const vaultDbId = ocidToId.get(rawData.vaultId);
       if (vaultDbId) {
-        if (await tryCreateRelation(prisma, resId, vaultDbId, 'stored-in')) {
-          created++;
-        }
+        addRelation(resId, vaultDbId, 'stored-in');
       }
     }
 
@@ -479,9 +413,7 @@ export async function buildRelationships(
     if (resType === 'observability/log' && rawData.logGroupId) {
       const lgDbId = ocidToId.get(rawData.logGroupId);
       if (lgDbId) {
-        if (await tryCreateRelation(prisma, resId, lgDbId, 'member-of')) {
-          created++;
-        }
+        addRelation(resId, lgDbId, 'member-of');
       }
     }
 
@@ -491,9 +423,7 @@ export async function buildRelationships(
     if (resType === 'container/image-signature' && rawData.imageId) {
       const imgDbId = ocidToId.get(rawData.imageId);
       if (imgDbId) {
-        if (await tryCreateRelation(prisma, resId, imgDbId, 'signs')) {
-          created++;
-        }
+        addRelation(resId, imgDbId, 'signs');
       }
     }
 
@@ -503,9 +433,7 @@ export async function buildRelationships(
     if (resType === 'iam/api-key' && rawData.userId) {
       const userDbId = ocidToId.get(rawData.userId);
       if (userDbId) {
-        if (await tryCreateRelation(prisma, resId, userDbId, 'belongs-to')) {
-          created++;
-        }
+        addRelation(resId, userDbId, 'belongs-to');
       }
     }
 
@@ -515,8 +443,74 @@ export async function buildRelationships(
     if (resType === 'iam/customer-secret-key' && rawData.userId) {
       const userDbId = ocidToId.get(rawData.userId);
       if (userDbId) {
-        if (await tryCreateRelation(prisma, resId, userDbId, 'belongs-to')) {
+        addRelation(resId, userDbId, 'belongs-to');
+      }
+    }
+  }
+  } // end chunk loop
+
+  // Deduplicate tuples
+  const seen = new Set<string>();
+  const uniqueTuples: RelationTuple[] = [];
+  for (const t of tuples) {
+    const key = `${t.fromResourceId}|${t.toResourceId}|${t.relationType}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueTuples.push(t);
+    }
+  }
+
+  // Batch upsert in chunks of 500
+  const BATCH_SIZE = 500;
+  let created = 0;
+
+  for (let i = 0; i < uniqueTuples.length; i += BATCH_SIZE) {
+    const chunk = uniqueTuples.slice(i, i + BATCH_SIZE);
+    const ops = chunk.map(t =>
+      prisma.resourceRelation.upsert({
+        where: {
+          fromResourceId_toResourceId_relationType: {
+            fromResourceId: t.fromResourceId,
+            toResourceId: t.toResourceId,
+            relationType: t.relationType,
+          },
+        },
+        update: { metadata: t.metadata },
+        create: {
+          fromResourceId: t.fromResourceId,
+          toResourceId: t.toResourceId,
+          relationType: t.relationType,
+          metadata: t.metadata,
+        },
+      }),
+    );
+
+    try {
+      await prisma.$transaction(ops);
+      created += chunk.length;
+    } catch {
+      // Fallback: try individually to isolate failures
+      for (const t of chunk) {
+        try {
+          await prisma.resourceRelation.upsert({
+            where: {
+              fromResourceId_toResourceId_relationType: {
+                fromResourceId: t.fromResourceId,
+                toResourceId: t.toResourceId,
+                relationType: t.relationType,
+              },
+            },
+            update: { metadata: t.metadata },
+            create: {
+              fromResourceId: t.fromResourceId,
+              toResourceId: t.toResourceId,
+              relationType: t.relationType,
+              metadata: t.metadata,
+            },
+          });
           created++;
+        } catch {
+          // Skip gracefully — the referenced resource may not exist in this snapshot
         }
       }
     }

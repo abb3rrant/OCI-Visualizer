@@ -1,67 +1,75 @@
-import dagre from 'dagre';
+import ELK, { type ElkNode, type ElkExtendedEdge } from 'elkjs/lib/elk.bundled.js';
 
-interface LayoutNode {
+const elk = new ELK();
+
+export interface LayoutNode {
   id: string;
   width: number;
   height: number;
-  parentNode?: string | null;
 }
 
-interface LayoutEdge {
+export interface LayoutEdge {
+  id: string;
   source: string;
   target: string;
 }
 
-export function getLayoutedElements(
+export interface LayoutResult {
+  positions: Record<string, { x: number; y: number }>;
+}
+
+/**
+ * Flat ELK layout — all nodes at the same level, hierarchy shown via edges.
+ * ELK's layered algorithm positions nodes in layers based on edge direction,
+ * naturally creating a top-down flow: DRG → VCN → Subnet → Instance.
+ */
+export async function getLayoutedElements(
   nodes: LayoutNode[],
   edges: LayoutEdge[],
-  direction: 'TB' | 'LR' = 'TB'
-) {
-  const g = new dagre.graphlib.Graph({ compound: true });
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: direction, nodesep: 80, ranksep: 120, marginx: 40, marginy: 40 });
+): Promise<LayoutResult> {
+  if (nodes.length === 0) {
+    return { positions: {} };
+  }
 
-  // Only layout top-level nodes with dagre (children handled by React Flow grouping)
-  const topLevelNodes = nodes.filter(n => !n.parentNode);
-  const childNodes = nodes.filter(n => n.parentNode);
+  const nodeIds = new Set(nodes.map(n => n.id));
 
-  topLevelNodes.forEach(node => {
-    g.setNode(node.id, { width: node.width, height: node.height });
-  });
+  const elkChildren: ElkNode[] = nodes.map(n => ({
+    id: n.id,
+    width: n.width,
+    height: n.height,
+  }));
 
-  // Only add edges between top-level nodes
-  const topLevelIds = new Set(topLevelNodes.map(n => n.id));
-  edges.forEach(edge => {
-    if (topLevelIds.has(edge.source) && topLevelIds.has(edge.target)) {
-      g.setEdge(edge.source, edge.target);
-    }
-  });
+  // Only include edges where both endpoints exist
+  const elkEdges: ElkExtendedEdge[] = edges
+    .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target) && e.source !== e.target)
+    .map(e => ({
+      id: e.id,
+      sources: [e.source],
+      targets: [e.target],
+    }));
 
-  dagre.layout(g);
+  const elkGraph: ElkNode = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': 'DOWN',
+      'elk.spacing.nodeNode': '30',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '60',
+      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.separateConnectedComponents': 'true',
+      'elk.spacing.componentComponent': '80',
+    },
+    children: elkChildren,
+    edges: elkEdges,
+  };
+
+  const result = await elk.layout(elkGraph);
 
   const positions: Record<string, { x: number; y: number }> = {};
-  topLevelNodes.forEach(node => {
-    const pos = g.node(node.id);
-    positions[node.id] = { x: pos.x - node.width / 2, y: pos.y - node.height / 2 };
-  });
+  for (const child of result.children || []) {
+    positions[child.id] = { x: child.x ?? 0, y: child.y ?? 0 };
+  }
 
-  // Position child nodes relative to parent (simple grid)
-  const childrenByParent = new Map<string, LayoutNode[]>();
-  childNodes.forEach(n => {
-    if (!n.parentNode) return;
-    const list = childrenByParent.get(n.parentNode) || [];
-    list.push(n);
-    childrenByParent.set(n.parentNode, list);
-  });
-
-  childrenByParent.forEach((children, _parentId) => {
-    const cols = Math.ceil(Math.sqrt(children.length));
-    children.forEach((child, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      positions[child.id] = { x: 40 + col * 200, y: 60 + row * 100 };
-    });
-  });
-
-  return positions;
+  return { positions };
 }

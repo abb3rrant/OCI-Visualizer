@@ -9,9 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@xyflow/react": "^12.4.4",
+    "@tanstack/react-virtual": "^3.13.18",
     "@urql/core": "^5.1.1",
+    "@xyflow/react": "^12.4.4",
     "dagre": "^0.8.5",
+    "elkjs": "^0.11.0",
     "graphql": "^16.10.0",
     "html-to-image": "^1.11.11",
     "react": "^18.3.1",
@@ -21,6 +23,7 @@
     "urql": "^4.2.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.6",
     "@types/dagre": "^0.7.52",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
@@ -28,7 +31,6 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
     "tailwindcss": "^4.0.6",
-    "@tailwindcss/vite": "^4.0.6",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
   }

@@ -113,6 +113,8 @@ export const TOPOLOGY_QUERY = gql`
         relationType
         animated
       }
+      totalCount
+      truncated
     }
   }
 `;
@@ -120,15 +122,19 @@ export const TOPOLOGY_QUERY = gql`
 export const AUDIT_QUERY = gql`
   query AuditFindings($snapshotId: String!) {
     auditFindings(snapshotId: $snapshotId) {
-      findings {
+      groupedFindings {
         severity
         category
         title
         description
-        resourceId
-        resourceOcid
-        resourceName
         recommendation
+        count
+        framework
+        resources {
+          id
+          ocid
+          name
+        }
       }
       summary {
         critical
@@ -137,6 +143,20 @@ export const AUDIT_QUERY = gql`
         low
         info
       }
+    }
+  }
+`;
+
+export const RESOURCE_FINDINGS_QUERY = gql`
+  query ResourceFindings($snapshotId: String!, $resourceId: String!) {
+    resourceFindings(snapshotId: $snapshotId, resourceId: $resourceId) {
+      severity
+      category
+      title
+      description
+      recommendation
+      count
+      framework
     }
   }
 `;
@@ -152,6 +172,14 @@ export const TAG_COMPLIANCE_QUERY = gql`
         count
         total
         percentage
+      }
+      missingTagResources {
+        id
+        ocid
+        displayName
+        resourceType
+        compartmentId
+        freeformTags
       }
     }
   }
@@ -173,6 +201,91 @@ export const COMPARTMENTS_QUERY = gql`
       ocid
       displayName
       compartmentId
+    }
+  }
+`;
+
+export const RESOURCE_WITH_BLOBS_QUERY = gql`
+  query ResourceWithBlobs($id: ID!) {
+    resource(id: $id) {
+      id
+      ocid
+      resourceType
+      displayName
+      compartmentId
+      lifecycleState
+      availabilityDomain
+      regionKey
+      timeCreated
+      rawData
+      freeformTags
+      blobs {
+        id
+        blobKey
+        content
+      }
+    }
+  }
+`;
+
+export const REACHABILITY_QUERY = gql`
+  query ReachabilityAnalysis($snapshotId: String!, $sourceIp: String, $destinationIp: String, $protocol: String, $port: Int) {
+    reachabilityAnalysis(snapshotId: $snapshotId, sourceIp: $sourceIp, destinationIp: $destinationIp, protocol: $protocol, port: $port) {
+      hops {
+        id
+        type
+        label
+        resourceType
+        ocid
+        status
+        details
+        metadata
+      }
+      links {
+        id
+        source
+        target
+        status
+        label
+      }
+      verdict
+      verdictDetail
+    }
+  }
+`;
+
+export const SEARCH_RESOURCES_QUERY = gql`
+  query SearchResources($snapshotId: String!, $query: String!, $limit: Int) {
+    searchResources(snapshotId: $snapshotId, query: $query, limit: $limit) {
+      id
+      ocid
+      resourceType
+      displayName
+    }
+  }
+`;
+
+export const SNAPSHOT_DIFF_QUERY = gql`
+  query SnapshotDiff($snapshotIdA: String!, $snapshotIdB: String!) {
+    snapshotDiff(snapshotIdA: $snapshotIdA, snapshotIdB: $snapshotIdB) {
+      added { ocid displayName resourceType }
+      removed { ocid displayName resourceType }
+      changed { ocid displayName resourceType changes { field oldValue newValue } }
+    }
+  }
+`;
+
+export const AUDIT_TREND_QUERY = gql`
+  query AuditTrend {
+    auditTrend {
+      snapshotId
+      snapshotName
+      date
+      critical
+      high
+      medium
+      low
+      info
     }
   }
 `;

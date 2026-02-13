@@ -13,7 +13,7 @@ export const topologyResolvers = {
       args: {
         snapshotId: string;
         compartmentId?: string;
-        viewType: 'NETWORK' | 'COMPARTMENT' | 'DEPENDENCY';
+        viewType: 'NETWORK' | 'COMPARTMENT' | 'DEPENDENCY' | 'EXPOSURE';
       },
       ctx: Context,
     ) => {

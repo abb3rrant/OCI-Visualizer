@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSnapshot } from '../contexts/SnapshotContext';
 import { useResources, useResourceCounts } from '../hooks/useResources';
@@ -7,17 +7,38 @@ import { COMPARTMENTS_QUERY, RESOURCE_QUERY } from '../graphql/queries';
 import SearchBar from '../components/common/SearchBar';
 import FilterPanel from '../components/common/FilterPanel';
 import ResourceTable from '../components/inventory/ResourceTable';
+import SkeletonTable from '../components/common/SkeletonTable';
 import DetailPanel from '../components/layout/DetailPanel';
 import type { Resource } from '../types';
 
+const MAX_ACCUMULATED = 500;
+
 export default function InventoryPage() {
   const { currentSnapshot } = useSnapshot();
-  const [searchParams] = useSearchParams();
-  const [search, setSearch] = useState('');
-  const [resourceType, setResourceType] = useState(searchParams.get('type') || '');
-  const [lifecycleState, setLifecycleState] = useState('');
-  const [compartmentOcid, setCompartmentOcid] = useState(searchParams.get('compartment') || '');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL-driven filter state
+  const search = searchParams.get('q') || '';
+  const resourceType = searchParams.get('type') || '';
+  const lifecycleState = searchParams.get('state') || '';
+  const compartmentOcid = searchParams.get('compartment') || '';
+
+  const updateParam = useCallback((key: string, value: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const setSearch = useCallback((v: string) => updateParam('q', v), [updateParam]);
+  const setResourceType = useCallback((v: string) => updateParam('type', v), [updateParam]);
+  const setLifecycleState = useCallback((v: string) => updateParam('state', v), [updateParam]);
+  const setCompartmentOcid = useCallback((v: string) => updateParam('compartment', v), [updateParam]);
+
   const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [accumulatedResources, setAccumulatedResources] = useState<any[]>([]);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
 
   const { counts } = useResourceCounts(currentSnapshot?.id || null);
@@ -41,9 +62,35 @@ export default function InventoryPage() {
     after: cursor,
   });
 
-  const resources = connection?.edges?.map((e: any) => e.node) || [];
+  // Accumulate resources across pages; reset when filters change
+  const filterKey = `${currentSnapshot?.id}|${resourceType}|${compartmentOcid}|${lifecycleState}|${search}`;
+  const prevFilterKey = useRef(filterKey);
+  useEffect(() => {
+    if (prevFilterKey.current !== filterKey) {
+      setAccumulatedResources([]);
+      setCursor(undefined);
+      prevFilterKey.current = filterKey;
+    }
+  }, [filterKey]);
+
+  const currentPageResources = connection?.edges?.map((e: any) => e.node) || [];
+  useEffect(() => {
+    if (currentPageResources.length > 0) {
+      setAccumulatedResources(prev => {
+        if (!cursor) return currentPageResources;
+        if (prev.length >= MAX_ACCUMULATED) return prev;
+        const existingIds = new Set(prev.map((r: any) => r.id));
+        const newItems = currentPageResources.filter((r: any) => !existingIds.has(r.id));
+        const combined = [...prev, ...newItems];
+        return combined.slice(0, MAX_ACCUMULATED);
+      });
+    }
+  }, [connection]);
+
+  const resources = accumulatedResources;
   const hasNext = connection?.pageInfo?.hasNextPage || false;
   const totalCount = connection?.totalCount || 0;
+  const atCap = resources.length >= MAX_ACCUMULATED && totalCount > MAX_ACCUMULATED;
 
   // Fetch full details for selected resource
   const [resourceResult] = useQuery({
@@ -78,7 +125,7 @@ export default function InventoryPage() {
   if (!currentSnapshot) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-400 text-lg">Select a snapshot to view inventory</p>
+        <p className="text-gray-400 dark:text-gray-500 text-lg">Select a snapshot to view inventory</p>
       </div>
     );
   }
@@ -89,8 +136,8 @@ export default function InventoryPage() {
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Resource Inventory</h2>
-            <p className="text-gray-500 text-sm">{totalCount} resources</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Resource Inventory</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">{totalCount} resources</p>
           </div>
           <button onClick={handleExportCsv} className="btn-secondary text-sm" disabled={!resources.length}>
             Export CSV
@@ -102,7 +149,7 @@ export default function InventoryPage() {
           <select
             value={compartmentOcid}
             onChange={(e) => { setCompartmentOcid(e.target.value); setCursor(undefined); }}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white max-w-xs truncate"
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-200 max-w-xs truncate"
           >
             <option value="">All Compartments</option>
             {compartments.map((c: any) => (
@@ -120,15 +167,23 @@ export default function InventoryPage() {
           />
         </div>
 
-        <ResourceTable
-          resources={resources}
-          loading={loading}
-          onRowClick={handleRowClick}
-          selectedId={selectedResourceId}
-        />
+        {loading && resources.length === 0 ? (
+          <SkeletonTable rows={8} columns={7} />
+        ) : (
+          <ResourceTable
+            resources={resources}
+            loading={loading && resources.length > 0}
+            onRowClick={handleRowClick}
+            selectedId={selectedResourceId}
+          />
+        )}
 
         {/* Pagination */}
-        {hasNext && (
+        {atCap ? (
+          <div className="text-center text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+            Showing {MAX_ACCUMULATED} of {totalCount.toLocaleString()}. Use filters to narrow results.
+          </div>
+        ) : hasNext ? (
           <div className="flex justify-center">
             <button
               onClick={() => setCursor(connection?.pageInfo?.endCursor || undefined)}
@@ -137,7 +192,7 @@ export default function InventoryPage() {
               Load More
             </button>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Detail panel */}

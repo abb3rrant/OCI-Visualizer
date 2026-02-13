@@ -44,43 +44,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">OCI Visualizer</h1>
-          <p className="text-gray-500 mt-2">Visualize your Oracle Cloud infrastructure</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">OCI Visualizer</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">Visualize your Oracle Cloud infrastructure</p>
         </div>
 
         <div className="card">
           {/* Tab switcher */}
-          <div className="flex mb-6 border-b border-gray-200">
+          <div className="flex mb-6 border-b border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setIsRegister(false)}
-              className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${!isRegister ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${!isRegister ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
             >Login</button>
             <button
               onClick={() => setIsRegister(true)}
-              className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${isRegister ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${isRegister ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
             >Register</button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-field" placeholder="Your name" />
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="input-field" placeholder="you@example.com" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="input-field" placeholder="••••••••" />
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <button type="submit" className="btn-primary w-full">
               {isRegister ? 'Create Account' : 'Sign In'}

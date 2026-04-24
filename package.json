@@ -1,0 +1,38 @@
+{
+  "name": "oci-visualizer",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"env DATABASE_URL=${DATABASE_URL:-file:./prisma/dev.db} npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "db:migrate": "npm run db:migrate -w server",
+    "db:generate": "npm run db:generate -w server",
+    "db:seed": "npm run db:seed -w server",
+    "start": "npm run start -w server",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "setup": "bash scripts/setup.sh",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop oci-visualizer",
+    "pm2:restart": "pm2 restart oci-visualizer",
+    "pm2:logs": "pm2 logs oci-visualizer",
+    "pm2:status": "pm2 status",
+    "pm2:startup": "pm2 startup",
+    "pm2:save": "pm2 save",
+    "deploy": "npm install && npx prisma migrate deploy --schema server/prisma/schema.prisma && npm run build && npm run pm2:restart"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "pm2": "^6.0.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

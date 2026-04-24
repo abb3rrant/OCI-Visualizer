@@ -1,0 +1,16 @@
+node_modules
+.git
+.github/
+.env
+.env.*
+!.env.example
+certs/
+*.md
+.vscode
+.turbo/
+coverage/
+server/prisma/dev.db*
+*.db-journal
+*.db-shm
+*.db-wal
+*.log

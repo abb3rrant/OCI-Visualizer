@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+certs/
+.env
+server/.env
+**/.env.local
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.DS_Store
+*.tsbuildinfo
+coverage/
+.turbo/

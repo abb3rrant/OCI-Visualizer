@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oci_visualizer
+      POSTGRES_USER: oci_viz
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Run ./scripts/setup.sh first (missing POSTGRES_PASSWORD)}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oci_viz -d oci_visualizer"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "work_mem=64MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "effective_cache_size=2GB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "synchronous_commit=off"
+    shm_size: 1g
+
+  app:
+    build: .
+    restart: unless-stopped
+    mem_limit: 8g
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql://oci_viz:${POSTGRES_PASSWORD}@postgres:5432/oci_visualizer?connection_limit=20&pool_timeout=30"
+      PORT: "4000"
+      NODE_ENV: production
+      NODE_OPTIONS: "--max-old-space-size=4096"
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://127.0.0.1:4000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
